@@ -235,7 +235,7 @@ class ApiService {
     required String nipNisn,
     required String password,
     required String role,
-    required bool isKaryawan,
+    required String status, // <--- BARU: status pegawai
   }) async {
     final deviceId = await getDeviceId();
 
@@ -250,7 +250,7 @@ class ApiService {
           "nip_nisn": nipNisn,
           "password": password,
           "role": role,
-          "is_karyawan": isKaryawan,
+          "status": status, // <--- KIRIM STATUS
           "device_id": deviceId,
         }),
       ),
@@ -328,6 +328,7 @@ class ApiService {
     required String namaLengkap,
     String? nipNisn,
     String? role,
+    String? status, // <--- TAMBAHAN BARU
     String? password,
   }) async {
     final headers = await _getHeaders();
@@ -337,6 +338,7 @@ class ApiService {
       "nama_lengkap": namaLengkap,
       if (nipNisn != null && nipNisn.isNotEmpty) "nip_nisn": nipNisn,
       if (role != null) "role": role,
+      if (status != null) "status": status, // <--- KIRIM STATUS
       if (password != null && password.isNotEmpty) "password": password,
     };
 

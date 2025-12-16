@@ -88,9 +88,11 @@ class _UserManagementPageState extends State<UserManagementPage> {
                         .toString()
                         .toLowerCase();
                     final nip = (u['nip_nisn']?.toString() ?? '').toLowerCase();
+                    final status = (u['status'] ?? '').toString().toLowerCase();
                     return nama.contains(query) ||
                         username.contains(query) ||
-                        nip.contains(query);
+                        nip.contains(query) ||
+                        status.contains(query);
                   }).toList()
             ..sort(
               (a, b) => (a['nama_lengkap'] ?? '').toString().compareTo(
@@ -167,6 +169,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
     final passC = TextEditingController();
 
     String selectedRole = (user['role'] ?? 'user').toString().toLowerCase();
+    String selectedStatus = (user['status'] ?? 'Karyawan').toString();
 
     final saved = await showDialog<bool>(
       context: context,
@@ -176,132 +179,166 @@ class _UserManagementPageState extends State<UserManagementPage> {
           constraints: const BoxConstraints(maxWidth: 600),
           child: Padding(
             padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Edit User',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 32),
-
-                TextField(
-                  controller: usernameC,
-                  decoration: _inputDecoration('Username', Icons.person),
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: namaC,
-                  decoration: _inputDecoration(
-                    'Nama Lengkap',
-                    Icons.account_circle,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Edit User',
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                   ),
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: nipC,
-                  decoration: _inputDecoration(
-                    'NIP/NISN (opsional)',
-                    Icons.badge,
+                  const SizedBox(height: 32),
+                  TextField(
+                    controller: usernameC,
+                    decoration: _inputDecoration('Username', Icons.person),
                   ),
-                ),
-                const SizedBox(height: 20),
-
-                DropdownButtonFormField<String>(
-                  value: selectedRole,
-                  decoration: _inputDecoration('Role', Icons.shield),
-                  items: const [
-                    DropdownMenuItem(value: 'user', child: Text('User')),
-                    DropdownMenuItem(value: 'admin', child: Text('Admin')),
-                    DropdownMenuItem(
-                      value: 'superadmin',
-                      child: Text('Super Admin'),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: namaC,
+                    decoration: _inputDecoration(
+                      'Nama Lengkap',
+                      Icons.account_circle,
                     ),
-                  ],
-                  onChanged: (val) => selectedRole = val!,
-                ),
-                const SizedBox(height: 20),
-
-                TextField(
-                  controller: passC,
-                  obscureText: true,
-                  decoration: _inputDecoration(
-                    'Password Baru (kosongkan jika tidak ubah)',
-                    Icons.lock,
                   ),
-                ),
-                const SizedBox(height: 40),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text(
-                        'Batal',
-                        style: TextStyle(fontSize: 18),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: nipC,
+                    decoration: _inputDecoration(
+                      'NIP/NISN ${selectedStatus != 'Karyawan' ? '(wajib)' : '(opsional)'}',
+                      Icons.badge,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  DropdownButtonFormField<String>(
+                    value: selectedRole,
+                    decoration: _inputDecoration('Role', Icons.shield),
+                    items: const [
+                      DropdownMenuItem(value: 'user', child: Text('User')),
+                      DropdownMenuItem(value: 'admin', child: Text('Admin')),
+                      DropdownMenuItem(
+                        value: 'superadmin',
+                        child: Text('Super Admin'),
                       ),
+                    ],
+                    onChanged: (val) => setState(() => selectedRole = val!),
+                  ),
+                  const SizedBox(height: 20),
+                  DropdownButtonFormField<String>(
+                    value: selectedStatus,
+                    decoration: _inputDecoration('Status Pegawai', Icons.work),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'Karyawan',
+                        child: Text('Karyawan'),
+                      ),
+                      DropdownMenuItem(value: 'Guru', child: Text('Guru')),
+                      DropdownMenuItem(
+                        value: 'Staff Lain',
+                        child: Text('Staff Lain'),
+                      ),
+                    ],
+                    onChanged: (val) {
+                      setState(() => selectedStatus = val!);
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: passC,
+                    obscureText: true,
+                    decoration: _inputDecoration(
+                      'Password Baru (kosongkan jika tidak ubah)',
+                      Icons.lock,
                     ),
-                    const SizedBox(width: 16),
-                    ElevatedButton(
-                      onPressed: () async {
-                        try {
-                          final res = await ApiService.updateUser(
-                            id: user['id'].toString(),
-                            username: usernameC.text.trim(),
-                            namaLengkap: namaC.text.trim(),
-                            nipNisn: nipC.text.trim(),
-                            role: selectedRole,
-                            password: passC.text.isEmpty
-                                ? null
-                                : passC.text.trim(),
-                          );
-
-                          if (res['status'] == 'success' ||
-                              res['status'] == true) {
-                            Navigator.pop(context, true);
-                            _loadUsers();
+                  ),
+                  const SizedBox(height: 40),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text(
+                          'Batal',
+                          style: TextStyle(fontSize: 18),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton(
+                        onPressed: () async {
+                          // Validasi NIP wajib jika bukan Karyawan
+                          if (selectedStatus != 'Karyawan' &&
+                              (nipC.text.trim().isEmpty)) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('User berhasil diperbarui'),
-                                backgroundColor: Colors.green,
+                                content: Text(
+                                  'NIP/NISN wajib diisi untuk Guru/Staff Lain',
+                                ),
+                                backgroundColor: Colors.redAccent,
                               ),
                             );
-                          } else {
+                            return;
+                          }
+
+                          try {
+                            final res = await ApiService.updateUser(
+                              id: user['id'].toString(),
+                              username: usernameC.text.trim(),
+                              namaLengkap: namaC.text.trim(),
+                              nipNisn: nipC.text.trim(),
+                              role: selectedRole,
+                              status: selectedStatus,
+                              password: passC.text.isEmpty
+                                  ? null
+                                  : passC.text.trim(),
+                            );
+
+                            if (res['status'] == 'success' ||
+                                res['status'] == true) {
+                              if (mounted) Navigator.pop(context, true);
+                              _loadUsers();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('User berhasil diperbarui'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    res['message'] ?? 'Gagal update',
+                                  ),
+                                  backgroundColor: Colors.redAccent,
+                                ),
+                              );
+                            }
+                          } catch (e) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text(res['message'] ?? 'Gagal update'),
+                                content: Text('Error: $e'),
                                 backgroundColor: Colors.redAccent,
                               ),
                             );
                           }
-                        } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Error: $e'),
-                              backgroundColor: Colors.redAccent,
-                            ),
-                          );
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3B82F6),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 40,
-                          vertical: 20,
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF3B82F6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 40,
+                            vertical: 20,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
+                        child: const Text(
+                          'Simpan Perubahan',
+                          style: TextStyle(fontSize: 18),
                         ),
                       ),
-                      child: const Text(
-                        'Simpan Perubahan',
-                        style: TextStyle(fontSize: 18),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -347,13 +384,24 @@ class _UserManagementPageState extends State<UserManagementPage> {
     }
   }
 
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'Guru':
+        return Colors.orange;
+      case 'Staff Lain':
+        return Colors.purple;
+      default:
+        return Colors.teal;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: Row(
         children: [
-          // Sidebar Kiri
+          // Sidebar Kiri (sama seperti sebelumnya)
           Container(
             width: 300,
             decoration: const BoxDecoration(
@@ -432,12 +480,11 @@ class _UserManagementPageState extends State<UserManagementPage> {
               ],
             ),
           ),
-
           // Konten Utama
           Expanded(
             child: Column(
               children: [
-                // Header dengan Tombol Back
+                // Header (tetap sama)
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 40,
@@ -477,13 +524,13 @@ class _UserManagementPageState extends State<UserManagementPage> {
                         ),
                       ),
                       const Spacer(),
-
                       SizedBox(
                         width: 450,
                         child: TextField(
                           controller: _searchC,
                           decoration: InputDecoration(
-                            hintText: 'Cari nama, username, atau NIP/NISN...',
+                            hintText:
+                                'Cari nama, username, NIP/NISN, atau status...',
                             prefixIcon: const Icon(
                               Icons.search_rounded,
                               size: 28,
@@ -531,7 +578,6 @@ class _UserManagementPageState extends State<UserManagementPage> {
                     ],
                   ),
                 ),
-
                 // List User
                 Expanded(
                   child: _loading
@@ -585,8 +631,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
                             final role = (u['role'] ?? 'user')
                                 .toString()
                                 .toLowerCase();
+                            final status = (u['status'] ?? 'Karyawan')
+                                .toString();
                             final roleColor = _getRoleColor(role);
-                            final roleLabel = _getRoleLabel(role);
+                            final statusColor = _getStatusColor(status);
 
                             return MouseRegion(
                               cursor: SystemMouseCursors.click,
@@ -602,12 +650,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
                                   child: InkWell(
                                     borderRadius: BorderRadius.circular(28),
                                     hoverColor: roleColor.withOpacity(0.08),
-                                    onTap: () {}, // optional
                                     child: Padding(
                                       padding: const EdgeInsets.all(36),
                                       child: Row(
                                         children: [
-                                          // Avatar
                                           Container(
                                             width: 120,
                                             height: 120,
@@ -642,8 +688,6 @@ class _UserManagementPageState extends State<UserManagementPage> {
                                             ),
                                           ),
                                           const SizedBox(width: 48),
-
-                                          // Info
                                           Expanded(
                                             child: Column(
                                               crossAxisAlignment:
@@ -673,40 +717,72 @@ class _UserManagementPageState extends State<UserManagementPage> {
                                                     'NIP/NISN: ${u['nip_nisn']}',
                                                   ),
                                                 const SizedBox(height: 20),
-                                                Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 20,
-                                                        vertical: 10,
-                                                      ),
-                                                  decoration: BoxDecoration(
-                                                    color: roleColor
-                                                        .withOpacity(0.15),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          30,
+                                                Row(
+                                                  children: [
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 20,
+                                                            vertical: 10,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color: roleColor
+                                                            .withOpacity(0.15),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              30,
+                                                            ),
+                                                        border: Border.all(
+                                                          color: roleColor
+                                                              .withOpacity(0.5),
+                                                          width: 2,
                                                         ),
-                                                    border: Border.all(
-                                                      color: roleColor
-                                                          .withOpacity(0.5),
-                                                      width: 2,
+                                                      ),
+                                                      child: Text(
+                                                        _getRoleLabel(role),
+                                                        style: TextStyle(
+                                                          color: roleColor,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 16,
+                                                        ),
+                                                      ),
                                                     ),
-                                                  ),
-                                                  child: Text(
-                                                    roleLabel,
-                                                    style: TextStyle(
-                                                      color: roleColor,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      fontSize: 16,
+                                                    const SizedBox(width: 16),
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 20,
+                                                            vertical: 10,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color: statusColor
+                                                            .withOpacity(0.15),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              30,
+                                                            ),
+                                                        border: Border.all(
+                                                          color: statusColor
+                                                              .withOpacity(0.5),
+                                                          width: 2,
+                                                        ),
+                                                      ),
+                                                      child: Text(
+                                                        status,
+                                                        style: TextStyle(
+                                                          color: statusColor,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 16,
+                                                        ),
+                                                      ),
                                                     ),
-                                                  ),
+                                                  ],
                                                 ),
                                               ],
                                             ),
                                           ),
-
-                                          // Action Buttons
                                           Row(
                                             children: [
                                               IconButton(
@@ -781,4 +857,3 @@ class _UserManagementPageState extends State<UserManagementPage> {
     );
   }
 }
-// 

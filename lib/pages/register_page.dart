@@ -1,6 +1,4 @@
 // pages/register_page.dart
-// VERSI FINAL – ENHANCED: Simple Elegant UI with subtle gradients, neumorphic elements, smooth transitions for premium feel (FIXED: Dropdown overflow with isDense & Flexible wrapping)
-
 import 'package:flutter/material.dart';
 import '../api/api_service.dart';
 
@@ -18,8 +16,7 @@ class _RegisterPageState extends State<RegisterPage>
   final _nipNisnC = TextEditingController();
   final _passwordC = TextEditingController();
 
-  final String _role = 'user';
-  bool _isKaryawan = false;
+  String _selectedStatus = 'Karyawan'; // Default: Karyawan
   bool _isLoading = false;
   bool _obscure = true;
 
@@ -61,8 +58,16 @@ class _RegisterPageState extends State<RegisterPage>
     super.dispose();
   }
 
+  bool get _isKaryawan => _selectedStatus == 'Karyawan';
+
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Validasi tambahan: NIP wajib jika bukan Karyawan
+    if (!_isKaryawan && _nipNisnC.text.trim().isEmpty) {
+      _showSnack('NIP/NISN wajib diisi untuk Guru atau Staff Lain');
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
@@ -71,29 +76,24 @@ class _RegisterPageState extends State<RegisterPage>
         namaLengkap: _namaC.text.trim(),
         nipNisn: _isKaryawan ? '' : _nipNisnC.text.trim(),
         password: _passwordC.text.trim(),
-        role: _role,
-        isKaryawan: _isKaryawan,
+        role: 'user', // tetap user, karena register biasa hanya untuk user
+        status: _selectedStatus,
       );
 
       if (!mounted) return;
 
       if (res['status'] == 'success') {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Registrasi berhasil! Silakan login',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-              backgroundColor: Color(0xFF10B981),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                // borderRadius: BorderRadius.circular(12),
-              ),
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Registrasi berhasil! Silakan login',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
-          );
-          Navigator.pop(context);
-        }
+            backgroundColor: Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.pop(context);
       } else {
         _showSnack(res['message'] ?? 'Gagal mendaftar');
       }
@@ -124,8 +124,6 @@ class _RegisterPageState extends State<RegisterPage>
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -170,7 +168,6 @@ class _RegisterPageState extends State<RegisterPage>
                   constraints: const BoxConstraints(maxWidth: 420),
                   child: Column(
                     children: [
-                      // Header Logo
                       Hero(
                         tag: 'register_logo',
                         child: Container(
@@ -209,11 +206,11 @@ class _RegisterPageState extends State<RegisterPage>
                           letterSpacing: 1.0,
                         ),
                       ),
-                      Text(
+                      const Text(
                         'Buat akun untuk mulai presensi',
                         style: TextStyle(
                           fontSize: 16,
-                          color: const Color(0xFF6B7280),
+                          color: Color(0xFF6B7280),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -239,36 +236,32 @@ class _RegisterPageState extends State<RegisterPage>
                             key: _formKey,
                             child: Column(
                               children: [
-                                // Username
                                 _buildInputField(
                                   controller: _usernameC,
                                   label: 'Username',
                                   icon: Icons.person_outline_rounded,
-                                  keyboardType: TextInputType.text,
                                   validator: (v) => v?.trim().isEmpty == true
                                       ? 'Username wajib diisi'
                                       : null,
                                 ),
                                 const SizedBox(height: 20),
 
-                                // Nama Lengkap
                                 _buildInputField(
                                   controller: _namaC,
                                   label: 'Nama Lengkap',
                                   icon: Icons.account_circle_outlined,
-                                  keyboardType: TextInputType.text,
                                   validator: (v) => v?.trim().isEmpty == true
                                       ? 'Nama wajib diisi'
                                       : null,
                                 ),
                                 const SizedBox(height: 20),
 
-                                // Checkbox Karyawan
+                                // Dropdown Status Pegawai
                                 Container(
                                   width: double.infinity,
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 16,
-                                    vertical: 12,
+                                    vertical: 8,
                                   ),
                                   decoration: BoxDecoration(
                                     color: Colors.grey[50],
@@ -280,42 +273,53 @@ class _RegisterPageState extends State<RegisterPage>
                                       width: 1,
                                     ),
                                   ),
-                                  child: CheckboxListTile(
-                                    value: _isKaryawan,
-                                    onChanged: (val) => setState(
-                                      () => _isKaryawan = val ?? false,
-                                    ),
-                                    title: const Text(
-                                      'Saya Karyawan',
-                                      style: TextStyle(
+                                  child: DropdownButtonFormField<String>(
+                                    value: _selectedStatus,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Status Pegawai',
+                                      labelStyle: TextStyle(
                                         fontSize: 18,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    subtitle: const Text(
-                                      'NIP/NIK tidak wajib diisi',
-                                      style: TextStyle(
-                                        fontSize: 15,
                                         color: Color(0xFF6B7280),
                                       ),
+                                      prefixIcon: Icon(
+                                        Icons.work_outline,
+                                        color: Color(0xFF3B82F6),
+                                      ),
+                                      border: InputBorder.none,
                                     ),
-                                    controlAffinity:
-                                        ListTileControlAffinity.leading,
-                                    activeColor: const Color(0xFF3B82F6),
-                                    contentPadding: EdgeInsets.zero,
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: 'Karyawan',
+                                        child: Text('Karyawan (NIP opsional)'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'Guru',
+                                        child: Text('Guru (NIP wajib)'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'Staff Lain',
+                                        child: Text('Staff Lain (NIP wajib)'),
+                                      ),
+                                    ],
+                                    onChanged: (val) =>
+                                        setState(() => _selectedStatus = val!),
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      color: Colors.black87,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: 20),
 
-                                // NIP/NIK (conditional)
+                                // NIP/NISN – hanya muncul jika bukan Karyawan
                                 if (!_isKaryawan)
                                   _buildInputField(
                                     controller: _nipNisnC,
-                                    label: 'NIP / NIK',
+                                    label: 'NIP / NISN (wajib)',
                                     icon: Icons.credit_card_outlined,
                                     keyboardType: TextInputType.number,
                                     validator: (v) => v?.trim().isEmpty == true
-                                        ? 'NIP/NIK wajib diisi'
+                                        ? 'NIP/NISN wajib diisi'
                                         : null,
                                   ),
                                 if (!_isKaryawan) const SizedBox(height: 20),
@@ -327,12 +331,10 @@ class _RegisterPageState extends State<RegisterPage>
                                   icon: Icons.lock_outline_rounded,
                                   obscureText: _obscure,
                                   validator: (v) {
-                                    if (v?.isEmpty == true) {
+                                    if (v?.isEmpty == true)
                                       return 'Password wajib diisi';
-                                    }
-                                    if (v!.length < 4) {
-                                      return 'Minimal 4 karakter';
-                                    }
+                                    if (v!.length < 6)
+                                      return 'Minimal 6 karakter';
                                     return null;
                                   },
                                   suffixIcon: IconButton(
@@ -345,68 +347,6 @@ class _RegisterPageState extends State<RegisterPage>
                                     onPressed: () =>
                                         setState(() => _obscure = !_obscure),
                                   ),
-                                ),
-                                const SizedBox(height: 20),
-
-                                // Role Dropdown (FIXED: Added isDense & Flexible for overflow prevention)
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[50],
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: const Color(
-                                        0xFF3B82F6,
-                                      ).withOpacity(0.2),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  // child: DropdownButtonHideUnderline(
-                                  //   child: DropdownButtonFormField<String>(
-                                  //     value: _role,
-                                  //     isDense: true, // FIXED: Prevents overflow
-                                  //     decoration: InputDecoration(
-                                  //       labelText: 'Role',
-                                  //       labelStyle: const TextStyle(
-                                  //         fontSize: 18,
-                                  //         color: Color(0xFF6B7280),
-                                  //       ),
-                                  //       prefixIcon: const Icon(
-                                  //         Icons.shield_outlined,
-                                  //         color: Color(0xFF3B82F6),
-                                  //       ),
-                                  //       border: InputBorder.none,
-                                  //       contentPadding:
-                                  //           const EdgeInsets.symmetric(
-                                  //             vertical: 16,
-                                  //           ),
-                                  //     ),
-                                  //     style: const TextStyle(
-                                  //       fontSize: 18,
-                                  //       color: Colors.black87,
-                                  //     ),
-                                  //     // dropdownColor: Colors.white,
-                                  //     // // items: const [
-                                  //     // //   DropdownMenuItem(
-                                  //     // //     value: 'user',
-                                  //     // //     child: Text('User (Karyawan / Guru)'),
-                                  //     // //   ),
-                                  //     // //   DropdownMenuItem(
-                                  //     // //     value: 'admin',
-                                  //     // //     child: Text('Admin'),
-                                  //     // //   ),
-                                  //     // //   DropdownMenuItem(
-                                  //     // //     value: 'superadmin',
-                                  //     // //     child: Text('Super Admin'),
-                                  //     // //   ),
-                                  //     // // ],
-                                  //     // onChanged: (val) =>
-                                  //     //     setState(() => _role = val!),
-                                  //   ),
-                                  // ),
                                 ),
                                 const SizedBox(height: 32),
 
@@ -450,16 +390,15 @@ class _RegisterPageState extends State<RegisterPage>
                                 ),
                                 const SizedBox(height: 20),
 
-                                // Login Link
                                 TextButton(
                                   onPressed: () => Navigator.pop(context),
                                   child: RichText(
-                                    text: TextSpan(
+                                    text: const TextSpan(
                                       style: TextStyle(
                                         fontSize: 16,
-                                        color: const Color(0xFF3B82F6),
+                                        color: Color(0xFF3B82F6),
                                       ),
-                                      children: const [
+                                      children: [
                                         TextSpan(text: 'Sudah punya akun? '),
                                         TextSpan(
                                           text: 'Login di sini',
@@ -477,10 +416,8 @@ class _RegisterPageState extends State<RegisterPage>
                         ),
                       ),
                       const SizedBox(height: 40),
-
-                      // Tips Container
+                      // Tips
                       Container(
-                        width: double.infinity,
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
@@ -498,16 +435,16 @@ class _RegisterPageState extends State<RegisterPage>
                             ),
                           ],
                         ),
-                        child: Column(
+                        child: const Column(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.info_outline_rounded,
                               size: 24,
                               color: Color(0xFF3B82F6),
                             ),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'Tips Registrasi:\n• Gunakan username unik\n• Password minimal 4 karakter',
+                            SizedBox(height: 12),
+                            Text(
+                              'Tips Registrasi:\n• Username unik & mudah diingat\n• Password minimal 6 karakter\n• Pilih status dengan benar',
                               style: TextStyle(
                                 color: Color(0xFF1F2937),
                                 fontSize: 14,
@@ -529,7 +466,6 @@ class _RegisterPageState extends State<RegisterPage>
     );
   }
 
-  // Helper for Input Fields
   Widget _buildInputField({
     required TextEditingController controller,
     required String label,
