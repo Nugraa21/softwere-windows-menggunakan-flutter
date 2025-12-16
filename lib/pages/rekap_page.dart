@@ -1,4 +1,4 @@
-// lib/pages/rekap_page.dart (VERSI BERSIH - REKAP BULANAN SAJA - TANPA KONFLIK IMPORT)
+// lib/pages/rekap_page.dart (VERSI FINAL - TANPA STATISTIK BULANAN + TABEL REKAP HARIAN LEBIH KEREN & PROFESIONAL)
 
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -201,13 +201,10 @@ class _RekapPageState extends State<RekapPage> {
     }
   }
 
-  xls.ExcelColor _getExcelBgColor(String code) {
-    return xls.ExcelColor.fromHexString('#${_getBgColorHex(code)}');
-  }
-
+  xls.ExcelColor _getExcelBgColor(String code) =>
+      xls.ExcelColor.fromHexString('#${_getBgColorHex(code)}');
   xls.ExcelColor _getExcelFontColor() =>
       xls.ExcelColor.fromHexString('#FFFFFF');
-
   xls.ExcelColor _getExcelGrayColor(String hexFull) =>
       xls.ExcelColor.fromHexString('#$hexFull');
 
@@ -246,7 +243,6 @@ class _RekapPageState extends State<RekapPage> {
     xls.Sheet lengkapSheet = excel['Rekap Lengkap'];
     xls.Sheet harianSheet = excel['Rekap Harian'];
 
-    // Sheet Rekap Lengkap
     lengkapSheet.appendRow([
       xls.TextCellValue('No'),
       xls.TextCellValue('Nama'),
@@ -274,14 +270,10 @@ class _RekapPageState extends State<RekapPage> {
       no++;
     }
 
-    // Sheet Rekap Harian
     List<xls.CellValue> header = [xls.TextCellValue('Nama')];
-    for (var d in _allDates) {
-      header.add(xls.TextCellValue(d.substring(8, 10)));
-    }
+    for (var d in _allDates) header.add(xls.TextCellValue(d.substring(8, 10)));
     harianSheet.appendRow(header);
 
-    // Styling header
     for (int i = 0; i < header.length; i++) {
       final cell = harianSheet.cell(
         xls.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0),
@@ -299,20 +291,16 @@ class _RekapPageState extends State<RekapPage> {
       List<xls.CellValue> row = [xls.TextCellValue(nama)];
       List<String> values = [];
       for (var d in _allDates) {
-        String value;
-        if (_isWeekend(d)) {
-          value = 'Libur';
-        } else if (_isFuture(d)) {
-          value = '';
-        } else {
-          value = _pivot[nama]![d] ?? '-';
-        }
+        String value = _isWeekend(d)
+            ? 'Libur'
+            : _isFuture(d)
+            ? ''
+            : (_pivot[nama]![d] ?? '-');
         row.add(xls.TextCellValue(value));
         values.add(value);
       }
       harianSheet.appendRow(row);
 
-      // Styling cells
       for (int i = 0; i < values.length; i++) {
         final value = values[i];
         final cell = harianSheet.cell(
@@ -385,115 +373,66 @@ class _RekapPageState extends State<RekapPage> {
   void _filterNames() {
     final query = _searchC.text.toLowerCase().trim();
     setState(() {
-      if (query.isEmpty) {
-        _filteredNames = List.from(_pivot.keys);
-      } else {
-        _filteredNames = _pivot.keys
-            .where((nama) => nama.toLowerCase().contains(query))
-            .toList();
-      }
+      _filteredNames = query.isEmpty
+          ? List.from(_pivot.keys)
+          : _pivot.keys
+                .where((nama) => nama.toLowerCase().contains(query))
+                .toList();
     });
   }
 
-  int _getStats(String code) {
-    int count = 0;
-    for (var nama in _pivot.keys) {
-      for (var d in _allDates) {
-        if (!_isWeekend(d) && !_isFuture(d) && _pivot[nama]![d] == code)
-          count++;
-      }
-    }
-    return count;
-  }
-
+  // Legend lebih elegan dan profesional dengan Chip
   Widget _buildLegend() {
+    final legends = [
+      ('R', 'Masuk / Pulang Biasa', const Color(0xFF10B981)),
+      ('PN', 'Penugasan Masuk / Pulang', const Color(0xFFF59E0B)),
+      ('PF', 'Penugasan Full Hari', const Color(0xFFFFB74D)),
+      ('I', 'Izin', const Color(0xFF2196F3)),
+      ('PC', 'Pulang Cepat', const Color(0xFFFFB74D)),
+      ('NA', 'Tidak Disetujui', const Color(0xFFD32F2F)),
+      ('-', 'Tidak Hadir', Colors.grey),
+      ('Libur', 'Hari Libur / Weekend', Colors.grey[600]!),
+    ];
+
     return Wrap(
       spacing: 20,
-      runSpacing: 12,
-      children: [
-        _legendItem('R', 'Masuk/Pulang Biasa', const Color(0xFF10B981)),
-        _legendItem('PN', 'Penugasan Masuk/Pulang', const Color(0xFFF59E0B)),
-        _legendItem('PF', 'Penugasan Full', const Color(0xFFFFB74D)),
-        _legendItem('I', 'Izin', const Color(0xFF2196F3)),
-        _legendItem('NA', 'Tidak Disetujui', const Color(0xFFD32F2F)),
-        _legendItem('-', 'Tidak Hadir', Colors.grey),
-        _legendItem('Libur', 'Weekend', Colors.grey[300]!),
-      ],
-    );
-  }
-
-  Widget _legendItem(String code, String label, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-            border: Border.all(color: color.withOpacity(0.6), width: 3),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Text('$code - $label', style: const TextStyle(fontSize: 16)),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return SizedBox(
-      width: 260,
-      child: Card(
-        elevation: 10,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, size: 48, color: color),
-              const SizedBox(height: 20),
-              Text(
-                title,
-                style: const TextStyle(fontSize: 18, color: Colors.black54),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                value,
+      runSpacing: 16,
+      children: legends
+          .map(
+            (e) => Chip(
+              avatar: CircleAvatar(backgroundColor: e.$3, radius: 12),
+              label: Text(
+                '${e.$1} → ${e.$2}',
                 style: TextStyle(
-                  fontSize: 40,
-                  fontWeight: FontWeight.bold,
-                  color: color,
+                  color: e.$3,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+              backgroundColor: e.$3.withOpacity(0.15),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
+                side: BorderSide(color: e.$3.withOpacity(0.5), width: 2),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              elevation: 4,
+            ),
+          )
+          .toList(),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final totalTeachers = _pivot.keys.length;
-    final workDays = _allDates.where((d) => !_isWeekend(d)).length;
-    final presentDays =
-        _getStats('R') + _getStats('PN') + _getStats('PF') + _getStats('I');
-    final absentDays = totalTeachers * workDays - presentDays;
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: Row(
         children: [
-          // Sidebar
+          // Sidebar Modern
           Container(
-            width: 300,
+            width: 320,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
@@ -504,24 +443,24 @@ class _RekapPageState extends State<RekapPage> {
             child: Column(
               children: [
                 Container(
-                  padding: const EdgeInsets.fromLTRB(32, 60, 32, 40),
+                  padding: const EdgeInsets.fromLTRB(32, 80, 32, 40),
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.all(24),
                         decoration: const BoxDecoration(
                           gradient: LinearGradient(
                             colors: [Color(0xFF3B82F6), Color(0xFF1E40AF)],
                           ),
-                          borderRadius: BorderRadius.all(Radius.circular(20)),
+                          borderRadius: BorderRadius.all(Radius.circular(24)),
                         ),
                         child: const Icon(
                           Icons.summarize_rounded,
-                          size: 52,
+                          size: 56,
                           color: Colors.white,
                         ),
                       ),
-                      const SizedBox(width: 20),
+                      const SizedBox(width: 24),
                       const Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -530,7 +469,7 @@ class _RekapPageState extends State<RekapPage> {
                               'Rekap Absensi',
                               style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 28,
+                                fontSize: 32,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -538,7 +477,7 @@ class _RekapPageState extends State<RekapPage> {
                               'Bulanan',
                               style: TextStyle(
                                 color: Colors.white70,
-                                fontSize: 16,
+                                fontSize: 18,
                               ),
                             ),
                           ],
@@ -547,36 +486,36 @@ class _RekapPageState extends State<RekapPage> {
                     ],
                   ),
                 ),
-                const Divider(color: Colors.white12),
+                const Divider(color: Colors.white12, thickness: 1),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.all(32),
+                    padding: const EdgeInsets.all(40),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Text(
                           'Periode',
-                          style: TextStyle(color: Colors.white70, fontSize: 18),
+                          style: TextStyle(color: Colors.white70, fontSize: 20),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 16),
                         Text(
                           '${_getIndonesianMonth(_selectedMonth)} $_selectedYear',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 26,
+                            fontSize: 28,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(height: 40),
+                        const SizedBox(height: 60),
                         const Text(
                           'Total Guru',
-                          style: TextStyle(color: Colors.white70, fontSize: 18),
+                          style: TextStyle(color: Colors.white70, fontSize: 20),
                         ),
                         Text(
                           '$totalTeachers',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 48,
+                            fontSize: 64,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -595,7 +534,7 @@ class _RekapPageState extends State<RekapPage> {
                 // Header
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 40,
+                    horizontal: 48,
                     vertical: 32,
                   ),
                   decoration: const BoxDecoration(
@@ -615,7 +554,7 @@ class _RekapPageState extends State<RekapPage> {
                         icon: const Icon(Icons.arrow_back_rounded, size: 36),
                         style: IconButton.styleFrom(
                           backgroundColor: Colors.grey[200],
-                          padding: const EdgeInsets.all(20),
+                          padding: EdgeInsets.all(20),
                         ),
                       ),
                       const SizedBox(width: 32),
@@ -724,228 +663,261 @@ class _RekapPageState extends State<RekapPage> {
                               Text(
                                 'Tidak ada data rekap',
                                 style: TextStyle(
-                                  fontSize: 28,
+                                  fontSize: 32,
                                   color: Colors.grey,
                                 ),
                               ),
-                              Text('Pilih periode lain atau refresh'),
+                              Text(
+                                'Pilih periode lain atau refresh',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  color: Colors.grey,
+                                ),
+                              ),
                             ],
                           ),
                         )
                       : SingleChildScrollView(
-                          padding: const EdgeInsets.all(40),
+                          padding: const EdgeInsets.all(48),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // HAPUS SELURUH BAGIAN STATISTIK BULANAN
+
+                              // Keterangan / Legend yang lebih besar dan menonjol
                               const Text(
-                                'Statistik Bulanan',
+                                'Keterangan Status Absen',
                                 style: TextStyle(
-                                  fontSize: 32,
+                                  fontSize: 36,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const SizedBox(height: 24),
-                              Wrap(
-                                spacing: 24,
-                                runSpacing: 24,
-                                children: [
-                                  _buildStatCard(
-                                    'Total Guru',
-                                    '$totalTeachers',
-                                    Icons.people_rounded,
-                                    const Color(0xFF3B82F6),
-                                  ),
-                                  _buildStatCard(
-                                    'Hari Kerja',
-                                    '$workDays',
-                                    Icons.calendar_today_rounded,
-                                    const Color(0xFF10B981),
-                                  ),
-                                  _buildStatCard(
-                                    'Hadir',
-                                    '$presentDays',
-                                    Icons.check_circle_rounded,
-                                    const Color(0xFF10B981),
-                                  ),
-                                  _buildStatCard(
-                                    'Absen',
-                                    '$absentDays',
-                                    Icons.cancel_rounded,
-                                    const Color(0xFFEF4444),
-                                  ),
-                                  _buildStatCard(
-                                    'Izin',
-                                    '${_getStats('I')}',
-                                    Icons.sick_rounded,
-                                    const Color(0xFF2196F3),
-                                  ),
-                                  _buildStatCard(
-                                    'Penugasan',
-                                    '${_getStats('PN') + _getStats('PF')}',
-                                    Icons.assignment_rounded,
-                                    const Color(0xFF8B5CF6),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 48),
-                              const Text(
-                                'Keterangan',
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 24),
+                              const SizedBox(height: 32),
                               Card(
-                                elevation: 10,
+                                elevation: 16,
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(28),
+                                  borderRadius: BorderRadius.circular(32),
                                 ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(32),
+                                child: Container(
+                                  padding: const EdgeInsets.all(48),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(32),
+                                    gradient: LinearGradient(
+                                      colors: [Colors.white, Colors.grey[50]!],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                  ),
                                   child: _buildLegend(),
                                 ),
                               ),
-                              const SizedBox(height: 48),
+                              const SizedBox(height: 80),
+
+                              // Rekap Harian - Tabel yang lebih modern & profesional
                               const Text(
                                 'Rekap Harian',
                                 style: TextStyle(
-                                  fontSize: 32,
+                                  fontSize: 36,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const SizedBox(height: 24),
+                              const SizedBox(height: 32),
                               Card(
-                                elevation: 12,
+                                elevation: 20,
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(28),
+                                  borderRadius: BorderRadius.circular(32),
                                 ),
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: DataTable(
-                                    headingRowHeight: 80,
-                                    dataRowHeight: 80,
-                                    columnSpacing: 20,
-                                    headingTextStyle: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 18,
-                                    ),
-                                    columns: [
-                                      const DataColumn(
-                                        label: Text('Nama Guru'),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(32),
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(32),
+                                        color: Colors.white,
                                       ),
-                                      ..._allDates.map((d) {
-                                        final day = int.parse(d.substring(8));
-                                        final date = DateTime.parse(d);
-                                        final abbrev = _getIndonesianDayAbbrev(
-                                          date,
-                                        );
-                                        return DataColumn(
-                                          label: Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              Text(
-                                                '$day',
-                                                style: const TextStyle(
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                              Text(
-                                                abbrev,
-                                                style: TextStyle(
-                                                  color: _isWeekend(d)
-                                                      ? Colors.red
-                                                      : Colors.grey[600],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      }),
-                                    ],
-                                    rows: (_filteredNames..sort()).map((nama) {
-                                      return DataRow(
-                                        cells: [
-                                          DataCell(
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    vertical: 12,
-                                                  ),
-                                              child: Text(
-                                                nama,
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 18,
-                                                ),
+                                      child: DataTable(
+                                        headingRowHeight: 90,
+                                        dataRowHeight: 90,
+                                        columnSpacing: 30,
+                                        headingTextStyle: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 19,
+                                          color: Color(0xFF0F172A),
+                                        ),
+                                        dataTextStyle: const TextStyle(
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        decoration: const BoxDecoration(),
+                                        columns: [
+                                          const DataColumn(
+                                            label: Text(
+                                              'Nama Guru',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 20,
                                               ),
                                             ),
                                           ),
                                           ..._allDates.map((d) {
-                                            if (_isWeekend(d)) {
-                                              return const DataCell(
-                                                Center(
-                                                  child: Text(
-                                                    'Libur',
-                                                    style: TextStyle(
-                                                      color: Colors.grey,
-                                                      fontStyle:
-                                                          FontStyle.italic,
+                                            final day = int.parse(
+                                              d.substring(8),
+                                            );
+                                            final date = DateTime.parse(d);
+                                            final abbrev =
+                                                _getIndonesianDayAbbrev(date);
+                                            final isWeekend = _isWeekend(d);
+                                            return DataColumn(
+                                              label: Column(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  Text(
+                                                    '$day',
+                                                    style: const TextStyle(
+                                                      fontSize: 24,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                     ),
                                                   ),
-                                                ),
-                                              );
-                                            }
-                                            if (_isFuture(d))
-                                              return const DataCell(Text(''));
-                                            final val = _pivot[nama]![d] ?? '-';
-                                            final color = _getFlutterColor(val);
-                                            return DataCell(
-                                              Center(
-                                                child: val == '-'
-                                                    ? const Text(
-                                                        '-',
-                                                        style: TextStyle(
-                                                          color: Colors.grey,
-                                                        ),
-                                                      )
-                                                    : Container(
-                                                        width: 50,
-                                                        height: 50,
-                                                        decoration: BoxDecoration(
-                                                          color: color
-                                                              .withOpacity(0.2),
-                                                          shape:
-                                                              BoxShape.circle,
-                                                          border: Border.all(
-                                                            color: color
-                                                                .withOpacity(
-                                                                  0.6,
-                                                                ),
-                                                            width: 3,
-                                                          ),
-                                                        ),
-                                                        child: Center(
-                                                          child: Text(
-                                                            val,
-                                                            style: TextStyle(
-                                                              color: color,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                              fontSize: 20,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    abbrev,
+                                                    style: TextStyle(
+                                                      fontSize: 17,
+                                                      color: isWeekend
+                                                          ? Colors.redAccent
+                                                          : Colors.grey[800],
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             );
                                           }),
                                         ],
-                                      );
-                                    }).toList(),
+                                        rows: (_filteredNames..sort()).asMap().entries.map((
+                                          entry,
+                                        ) {
+                                          final index = entry.key;
+                                          final nama = entry.value;
+                                          return DataRow(
+                                            color: MaterialStatePropertyAll(
+                                              index % 2 == 0
+                                                  ? Colors.blueGrey[50]!
+                                                        .withOpacity(0.3)
+                                                  : Colors.white,
+                                            ),
+                                            cells: [
+                                              DataCell(
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        vertical: 8,
+                                                      ),
+                                                  child: Text(
+                                                    nama,
+                                                    style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      fontSize: 18,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              ..._allDates.map((d) {
+                                                if (_isWeekend(d)) {
+                                                  return const DataCell(
+                                                    Center(
+                                                      child: Text(
+                                                        'Libur',
+                                                        style: TextStyle(
+                                                          color:
+                                                              Colors.redAccent,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          fontStyle:
+                                                              FontStyle.italic,
+                                                          fontSize: 16,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+                                                if (_isFuture(d))
+                                                  return const DataCell(
+                                                    Text(''),
+                                                  );
+                                                final val =
+                                                    _pivot[nama]![d] ?? '-';
+                                                final color = _getFlutterColor(
+                                                  val,
+                                                );
+                                                return DataCell(
+                                                  Center(
+                                                    child: val == '-'
+                                                        ? const Text(
+                                                            '-',
+                                                            style: TextStyle(
+                                                              color:
+                                                                  Colors.grey,
+                                                              fontSize: 28,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                            ),
+                                                          )
+                                                        : Container(
+                                                            width: 64,
+                                                            height: 64,
+                                                            decoration: BoxDecoration(
+                                                              color: color
+                                                                  .withOpacity(
+                                                                    0.2,
+                                                                  ),
+                                                              shape: BoxShape
+                                                                  .circle,
+                                                              border: Border.all(
+                                                                color: color
+                                                                    .withOpacity(
+                                                                      0.8,
+                                                                    ),
+                                                                width: 5,
+                                                              ),
+                                                              boxShadow: [
+                                                                BoxShadow(
+                                                                  color: color
+                                                                      .withOpacity(
+                                                                        0.3,
+                                                                      ),
+                                                                  blurRadius:
+                                                                      12,
+                                                                ),
+                                                              ],
+                                                            ),
+                                                            child: Center(
+                                                              child: Text(
+                                                                val,
+                                                                style: TextStyle(
+                                                                  color: color,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                  fontSize: 28,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                  ),
+                                                );
+                                              }),
+                                            ],
+                                          );
+                                        }).toList(),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
