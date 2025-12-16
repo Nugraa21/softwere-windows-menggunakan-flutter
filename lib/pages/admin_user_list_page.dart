@@ -1,4 +1,4 @@
-// lib/pages/admin_user_list_page.dart (ENHANCED: Modern UI with neumorphic cards, subtle gradients, hero animations, improved search with debounce, empty state, consistent styling for seamless UX)
+// lib/pages/admin_user_list_page.dart
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../api/api_service.dart';
@@ -11,28 +11,16 @@ class AdminUserListPage extends StatefulWidget {
   State<AdminUserListPage> createState() => _AdminUserListPageState();
 }
 
-class _AdminUserListPageState extends State<AdminUserListPage>
-    with TickerProviderStateMixin {
+class _AdminUserListPageState extends State<AdminUserListPage> {
   bool _loading = true;
   List<dynamic> _users = [];
   List<dynamic> _filteredUsers = [];
   final TextEditingController _searchC = TextEditingController();
   Timer? _debounce;
 
-  late AnimationController _fadeController;
-  late Animation<double> _fadeAnimation;
-
   @override
   void initState() {
     super.initState();
-    _fadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
-    );
-    _fadeController.forward();
     _loadUsers();
     _searchC.addListener(_onSearchChanged);
   }
@@ -42,20 +30,19 @@ class _AdminUserListPageState extends State<AdminUserListPage>
     _debounce?.cancel();
     _searchC.removeListener(_onSearchChanged);
     _searchC.dispose();
-    _fadeController.dispose();
     super.dispose();
   }
 
   void _onSearchChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), _filterUsers);
+    _debounce = Timer(const Duration(milliseconds: 400), _filterUsers);
   }
 
   Future<void> _loadUsers() async {
     setState(() => _loading = true);
     try {
       final data = await ApiService.getUsers();
-      final filtered = (data)
+      final filtered = data
           .where(
             (u) =>
                 (u['role']?.toString().toLowerCase() ?? '') == 'user' &&
@@ -65,10 +52,10 @@ class _AdminUserListPageState extends State<AdminUserListPage>
 
       setState(() {
         _users = filtered;
-        _filteredUsers = filtered
+        _filteredUsers = List.from(filtered)
           ..sort(
             (a, b) => (a['nama_lengkap'] ?? '').toString().compareTo(
-              (b['nama_lengkap'] ?? ''),
+              b['nama_lengkap'] ?? '',
             ),
           );
       });
@@ -76,15 +63,8 @@ class _AdminUserListPageState extends State<AdminUserListPage>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Gagal memuat user: $e',
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-            backgroundColor: const Color(0xFFEF4444),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            content: Text('Gagal memuat user: $e'),
+            backgroundColor: Colors.redAccent,
           ),
         );
       }
@@ -98,7 +78,7 @@ class _AdminUserListPageState extends State<AdminUserListPage>
     setState(() {
       _filteredUsers =
           query.isEmpty
-                ? _users
+                ? List.from(_users)
                 : _users.where((u) {
                     final nama = (u['nama_lengkap'] ?? u['nama'] ?? '')
                         .toString()
@@ -106,11 +86,14 @@ class _AdminUserListPageState extends State<AdminUserListPage>
                     final username = (u['username'] ?? '')
                         .toString()
                         .toLowerCase();
-                    return nama.contains(query) || username.contains(query);
+                    final nip = (u['nip_nisn']?.toString() ?? '').toLowerCase();
+                    return nama.contains(query) ||
+                        username.contains(query) ||
+                        nip.contains(query);
                   }).toList()
             ..sort(
               (a, b) => (a['nama_lengkap'] ?? '').toString().compareTo(
-                (b['nama_lengkap'] ?? ''),
+                b['nama_lengkap'] ?? '',
               ),
             );
     });
@@ -118,134 +101,59 @@ class _AdminUserListPageState extends State<AdminUserListPage>
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text(
-          'Kelola User Presensi',
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 20),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: Colors.white,
-        actions: [
-          Hero(
-            tag: 'refresh_users',
-            child: IconButton(
-              icon: const Icon(Icons.refresh_rounded, size: 28),
-              onPressed: _loadUsers,
+      backgroundColor: Colors.grey[50],
+      body: Row(
+        children: [
+          // Sidebar Kiri (elegan gelap)
+          Container(
+            width: 300,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-        ],
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                const Color(0xFF3B82F6).withOpacity(0.9),
-                const Color(0xFF3B82F6).withOpacity(0.6),
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
-        ),
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [const Color(0xFF3B82F6).withOpacity(0.05), Colors.white],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: Column(
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  MediaQuery.of(context).padding.top + 100,
-                  16,
-                  16,
-                ),
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.white, Colors.white.withOpacity(0.95)],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 15,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Column(
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.fromLTRB(32, 60, 32, 40),
+                  child: Row(
                     children: [
-                      Padding(
+                      Container(
                         padding: const EdgeInsets.all(20),
-                        child: TextField(
-                          controller: _searchC,
-                          decoration: InputDecoration(
-                            hintText: 'Cari nama atau username...',
-                            prefixIcon: Icon(
-                              Icons.search_rounded,
-                              color: const Color(0xFF6B7280),
-                              size: 24,
-                            ),
-                            suffixIcon: _searchC.text.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(
-                                      Icons.clear_rounded,
-                                      color: Color(0xFF6B7280),
-                                    ),
-                                    onPressed: () {
-                                      _searchC.clear();
-                                    },
-                                  )
-                                : null,
-                            border: InputBorder.none,
-                            hintStyle: TextStyle(
-                              color: const Color(0xFF9CA3AF),
-                            ),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF3B82F6), Color(0xFF1E40AF)],
                           ),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Icon(
+                          Icons.people_rounded,
+                          size: 52,
+                          color: Colors.white,
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              const Color(0xFF3B82F6).withOpacity(0.05),
-                              Colors.transparent,
-                            ],
-                          ),
-                          borderRadius: const BorderRadius.only(
-                            bottomLeft: Radius.circular(16),
-                            bottomRight: Radius.circular(16),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      const SizedBox(width: 20),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Total: ${_filteredUsers.length}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 18,
-                                color: Color(0xFF3B82F6),
+                              'Kelola User',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                            Icon(
-                              Icons.people_outline_rounded,
-                              color: const Color(0xFF3B82F6),
-                              size: 24,
+                            Text(
+                              'Sistem Presensi',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 16,
+                              ),
                             ),
                           ],
                         ),
@@ -253,231 +161,345 @@ class _AdminUserListPageState extends State<AdminUserListPage>
                     ],
                   ),
                 ),
-              ),
-              Expanded(
-                child: _loading
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 3,
-                          color: Color(0xFF3B82F6),
+                const Divider(color: Colors.white12, height: 1),
+                const Spacer(),
+                Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      Text(
+                        '${_filteredUsers.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 48,
+                          fontWeight: FontWeight.bold,
                         ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _loadUsers,
-                        color: const Color(0xFF3B82F6),
-                        child: _filteredUsers.isEmpty
-                            ? Center(
-                                child: Container(
-                                  margin: const EdgeInsets.all(40),
-                                  padding: const EdgeInsets.all(40),
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        const Color(
-                                          0xFF3B82F6,
-                                        ).withOpacity(0.05),
-                                        Colors.white,
-                                      ],
-                                    ),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: const Color(
-                                        0xFF3B82F6,
-                                      ).withOpacity(0.2),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        _searchC.text.isNotEmpty
-                                            ? Icons.search_off_rounded
-                                            : Icons.people_outline_rounded,
-                                        size: 80,
-                                        color: const Color(0xFF9CA3AF),
-                                      ),
-                                      const SizedBox(height: 20),
-                                      Text(
-                                        _searchC.text.isNotEmpty
-                                            ? 'Tidak ditemukan user'
-                                            : 'Belum ada user',
-                                        style: const TextStyle(
-                                          // fontSize: 18,
-                                          fontWeight: FontWeight.w500,
-                                          color: Color(0xFF6B7280),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      if (_searchC.text.isEmpty)
-                                        Text(
-                                          'Tambahkan user baru untuk memulai',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: const Color(0xFF9CA3AF),
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              )
-                            : ListView.builder(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                itemCount: _filteredUsers.length,
-                                itemBuilder: (ctx, i) {
-                                  final u = _filteredUsers[i];
-                                  final nama =
-                                      u['nama_lengkap'] ??
-                                      u['nama'] ??
-                                      'Unknown';
-                                  final username = u['username'] ?? '';
-                                  final nip = u['nip_nisn']?.toString() ?? '';
-                                  final userId = u['id'].toString();
+                      ),
+                      const Text(
+                        'Total Pengguna',
+                        style: TextStyle(color: Colors.white70, fontSize: 18),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
 
-                                  return Container(
-                                    margin: const EdgeInsets.symmetric(
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          Colors.white,
-                                          Colors.white.withOpacity(0.95),
-                                        ],
-                                      ),
-                                      borderRadius: BorderRadius.circular(16),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.05),
-                                          blurRadius: 15,
-                                          offset: const Offset(0, 6),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Hero(
-                                      tag: 'user_$userId',
-                                      child: Material(
-                                        color: Colors.transparent,
-                                        child: InkWell(
-                                          borderRadius: BorderRadius.circular(
-                                            16,
+          // Konten Utama
+          Expanded(
+            child: Column(
+              children: [
+                // Header Atas dengan Tombol Back
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 40,
+                    vertical: 32,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      // Tombol Kembali
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.arrow_back_rounded, size: 36),
+                        tooltip: 'Kembali',
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.grey[200],
+                          padding: const EdgeInsets.all(20),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 32),
+
+                      // Judul
+                      const Text(
+                        'Daftar Pengguna Presensi',
+                        style: TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+
+                      const Spacer(),
+
+                      // Search Bar
+                      SizedBox(
+                        width: 450,
+                        child: TextField(
+                          controller: _searchC,
+                          decoration: InputDecoration(
+                            hintText: 'Cari nama, username, atau NIP/NIK...',
+                            prefixIcon: const Icon(
+                              Icons.search_rounded,
+                              size: 28,
+                            ),
+                            suffixIcon: _searchC.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear_rounded),
+                                    onPressed: _searchC.clear,
+                                  )
+                                : null,
+                            filled: true,
+                            fillColor: Colors.grey[100],
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(30),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 28,
+                              vertical: 20,
+                            ),
+                          ),
+                          style: const TextStyle(fontSize: 18),
+                        ),
+                      ),
+
+                      const SizedBox(width: 32),
+
+                      // Tombol Refresh
+                      ElevatedButton.icon(
+                        onPressed: _loadUsers,
+                        icon: const Icon(Icons.refresh_rounded, size: 26),
+                        label: const Text(
+                          'Refresh',
+                          style: TextStyle(fontSize: 18),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF3B82F6),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 36,
+                            vertical: 22,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                          elevation: 8,
+                          shadowColor: const Color(0xFF3B82F6).withOpacity(0.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Body List User
+                Expanded(
+                  child: _loading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 5,
+                            color: Color(0xFF3B82F6),
+                          ),
+                        )
+                      : _filteredUsers.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                _searchC.text.isNotEmpty
+                                    ? Icons.search_off_rounded
+                                    : Icons.people_alt_outlined,
+                                size: 140,
+                                color: Colors.grey[400],
+                              ),
+                              const SizedBox(height: 40),
+                              Text(
+                                _searchC.text.isNotEmpty
+                                    ? 'Tidak ditemukan hasil pencarian'
+                                    : 'Belum ada pengguna terdaftar',
+                                style: const TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                _searchC.text.isNotEmpty
+                                    ? 'Coba gunakan kata kunci lain'
+                                    : 'Tambahkan user baru untuk memulai',
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(40, 32, 40, 60),
+                          itemCount: _filteredUsers.length,
+                          itemBuilder: (ctx, i) {
+                            final u = _filteredUsers[i];
+                            final nama =
+                                u['nama_lengkap'] ?? u['nama'] ?? 'Unknown';
+                            final username = u['username'] ?? '';
+                            final nip = u['nip_nisn']?.toString() ?? '';
+                            final userId = u['id'].toString();
+
+                            return MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                curve: Curves.easeOut,
+                                margin: const EdgeInsets.only(bottom: 28),
+                                child: Card(
+                                  elevation: 10,
+                                  shadowColor: const Color(
+                                    0xFF3B82F6,
+                                  ).withOpacity(0.15),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(28),
+                                  ),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(28),
+                                    hoverColor: const Color(
+                                      0xFF3B82F6,
+                                    ).withOpacity(0.08),
+                                    splashColor: const Color(
+                                      0xFF3B82F6,
+                                    ).withOpacity(0.15),
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => AdminUserDetailPage(
+                                            userId: userId,
+                                            userName: nama,
                                           ),
-                                          onTap: () => Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  AdminUserDetailPage(
-                                                    userId: userId,
-                                                    userName: nama,
-                                                  ),
+                                        ),
+                                      );
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(36),
+                                      child: Row(
+                                        children: [
+                                          // Avatar Premium
+                                          Container(
+                                            width: 120,
+                                            height: 120,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              gradient: const LinearGradient(
+                                                colors: [
+                                                  Color(0xFF3B82F6),
+                                                  Color(0xFF1E40AF),
+                                                ],
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                              ),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: const Color(
+                                                    0xFF3B82F6,
+                                                  ).withOpacity(0.3),
+                                                  blurRadius: 20,
+                                                  offset: const Offset(0, 8),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Center(
+                                              child: Text(
+                                                username.isNotEmpty
+                                                    ? username[0].toUpperCase()
+                                                    : 'U',
+                                                style: const TextStyle(
+                                                  fontSize: 56,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
                                             ),
                                           ),
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(20),
-                                            child: Row(
+                                          const SizedBox(width: 48),
+
+                                          // Info User
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
-                                                Container(
-                                                  width: 60,
-                                                  height: 60,
-                                                  decoration: BoxDecoration(
-                                                    gradient: LinearGradient(
-                                                      colors: [
-                                                        const Color(
-                                                          0xFF3B82F6,
-                                                        ).withOpacity(0.1),
-                                                        const Color(
-                                                          0xFF3B82F6,
-                                                        ).withOpacity(0.05),
-                                                      ],
-                                                    ),
-                                                    shape: BoxShape.circle,
-                                                    border: Border.all(
-                                                      color: const Color(
-                                                        0xFF3B82F6,
-                                                      ).withOpacity(0.2),
-                                                      width: 1,
-                                                    ),
-                                                  ),
-                                                  child: Center(
-                                                    child: Text(
-                                                      username.isNotEmpty
-                                                          ? username[0]
-                                                                .toUpperCase()
-                                                          : 'U',
-                                                      style: const TextStyle(
-                                                        fontSize: 24,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        color: Color(
-                                                          0xFF3B82F6,
-                                                        ),
-                                                      ),
-                                                    ),
+                                                Text(
+                                                  nama,
+                                                  style: const TextStyle(
+                                                    fontSize: 32,
+                                                    fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
-                                                const SizedBox(width: 20),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(
-                                                        nama,
-                                                        style: const TextStyle(
-                                                          fontSize: 18,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(height: 6),
-                                                      Text(
-                                                        'Username: $username',
-                                                        style: TextStyle(
-                                                          color: const Color(
-                                                            0xFF6B7280,
-                                                          ),
-                                                          fontSize: 14,
-                                                        ),
-                                                      ),
-                                                      if (nip.isNotEmpty)
-                                                        Text(
-                                                          'NIP/NIK: $nip',
-                                                          style: TextStyle(
-                                                            color: const Color(
-                                                              0xFF6B7280,
-                                                            ),
-                                                            fontSize: 14,
-                                                          ),
-                                                        ),
-                                                    ],
+                                                const SizedBox(height: 16),
+                                                if (username.isNotEmpty)
+                                                  _buildInfoRow(
+                                                    Icons
+                                                        .alternate_email_rounded,
+                                                    'Username: $username',
                                                   ),
-                                                ),
-                                                Icon(
-                                                  Icons
-                                                      .arrow_forward_ios_rounded,
-                                                  color: const Color(
-                                                    0xFF6B7280,
+                                                if (nip.isNotEmpty)
+                                                  _buildInfoRow(
+                                                    Icons.badge_rounded,
+                                                    'NIP/NIK: $nip',
                                                   ),
-                                                  size: 20,
+                                                const SizedBox(height: 20),
+                                                const Text(
+                                                  'Klik untuk melihat riwayat & detail presensi',
+                                                  style: TextStyle(
+                                                    fontSize: 17,
+                                                    color: Colors.grey,
+                                                  ),
                                                 ),
                                               ],
                                             ),
                                           ),
-                                        ),
+
+                                          // Arrow Icon
+                                          Icon(
+                                            Icons.arrow_forward_ios_rounded,
+                                            size: 36,
+                                            color: Colors.grey[500],
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  );
-                                },
+                                  ),
+                                ),
                               ),
-                      ),
-              ),
-            ],
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 28, color: const Color(0xFF3B82F6)),
+          const SizedBox(width: 16),
+          Text(
+            text,
+            style: const TextStyle(fontSize: 20, color: Colors.black87),
+          ),
+        ],
       ),
     );
   }

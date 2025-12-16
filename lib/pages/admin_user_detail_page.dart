@@ -25,28 +25,16 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
   List<dynamic> _history = [];
   List<dynamic> _waitingPresensi = [];
 
-  late AnimationController _fadeController;
-  late Animation<double> _fadeAnimation;
-
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _fadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
-    );
-    _fadeController.forward();
     _loadData();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    _fadeController.dispose();
     super.dispose();
   }
 
@@ -87,11 +75,7 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal memuat data: $e'),
-            backgroundColor: const Color(0xFFEF4444),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            backgroundColor: Colors.redAccent,
           ),
         );
       }
@@ -111,13 +95,7 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: isSuccess
-              ? const Color(0xFF10B981)
-              : const Color(0xFFEF4444),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          backgroundColor: isSuccess ? Colors.green : Colors.redAccent,
         ),
       );
 
@@ -127,11 +105,7 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
-            backgroundColor: const Color(0xFFEF4444),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            backgroundColor: Colors.redAccent,
           ),
         );
       }
@@ -143,47 +117,39 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
     showDialog(
       context: context,
       builder: (_) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(8),
+        insetPadding: const EdgeInsets.all(40),
         child: Stack(
           children: [
-            Center(
-              child: Hero(
-                tag: 'photo_${url.hashCode}',
-                child: InteractiveViewer(
-                  panEnabled: true,
-                  boundaryMargin: const EdgeInsets.all(20),
-                  minScale: 0.5,
-                  maxScale: 4,
-                  child: Image.network(
-                    url,
-                    fit: BoxFit.contain,
-                    loadingBuilder: (_, child, progress) => progress == null
-                        ? child
-                        : const Center(child: CircularProgressIndicator()),
-                    errorBuilder: (_, __, ___) =>
-                        const Icon(Icons.broken_image_rounded, size: 80),
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 6,
+              child: Center(
+                child: Image.network(
+                  url,
+                  loadingBuilder: (_, child, progress) => progress == null
+                      ? child
+                      : const Center(
+                          child: CircularProgressIndicator(strokeWidth: 3),
+                        ),
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.broken_image,
+                    size: 120,
+                    color: Colors.grey,
                   ),
                 ),
               ),
             ),
             Positioned(
-              top: 40,
+              top: 20,
               right: 20,
-              child: GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: const BoxDecoration(
-                    color: Colors.black54,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.close_rounded,
-                    color: Colors.white,
-                    size: 28,
-                  ),
+              child: IconButton(
+                icon: const Icon(
+                  Icons.close_rounded,
+                  size: 36,
+                  color: Colors.white,
                 ),
+                style: IconButton.styleFrom(backgroundColor: Colors.black54),
+                onPressed: () => Navigator.pop(context),
               ),
             ),
           ],
@@ -197,82 +163,67 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
     showDialog(
       context: context,
       builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Row(
-                children: [
-                  Icon(
-                    Icons.insert_drive_file_rounded,
-                    size: 28,
-                    color: Color(0xFFF59E0B),
-                  ),
-                  SizedBox(width: 12),
-                  Text(
-                    'Dokumen',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    url,
-                    fit: BoxFit.contain,
-                    loadingBuilder: (_, child, progress) => progress == null
-                        ? child
-                        : const Center(child: CircularProgressIndicator()),
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.grey[200],
-                      child: const Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.insert_drive_file_outlined,
-                              size: 64,
-                              color: Color(0xFF9CA3AF),
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              'Tidak dapat menampilkan dokumen',
-                              style: TextStyle(color: Color(0xFF6B7280)),
-                            ),
-                          ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800, maxHeight: 900),
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: const [
+                    Icon(
+                      Icons.description_rounded,
+                      size: 32,
+                      color: Color(0xFFF59E0B),
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Dokumen Pendukung',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.network(
+                      url,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (_, child, progress) => progress == null
+                          ? child
+                          : const Center(child: CircularProgressIndicator()),
+                      errorBuilder: (_, __, ___) => Container(
+                        color: Colors.grey[200],
+                        child: const Center(
+                          child: Text(
+                            'Gagal memuat dokumen',
+                            style: TextStyle(fontSize: 18),
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.close_rounded),
-                  label: const Text('Tutup'),
+                  label: const Text('Tutup', style: TextStyle(fontSize: 16)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF3B82F6),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 16,
                     ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    backgroundColor: Colors.grey[800],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -323,12 +274,11 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
         return const Color(0xFF10B981);
       case 'Ditolak':
         return const Color(0xFFEF4444);
-      default: // Waiting
+      default:
         return const Color(0xFFF59E0B);
     }
   }
 
-  // Card yang dipakai di kedua tab
   Widget _buildPresensiCard(
     Map<String, dynamic> item, {
     bool showActions = false,
@@ -348,391 +298,253 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
     final created = DateTime.parse(
       item['created_at'] ?? DateTime.now().toIso8601String(),
     );
-    final formattedDate = DateFormat('dd MMM yyyy HH:mm').format(created);
+    final formattedDate = DateFormat('dd MMMM yyyy, HH:mm').format(created);
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 15,
-            offset: const Offset(0, 6),
+    return Card(
+      elevation: 8,
+      shadowColor: Colors.black26,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: LinearGradient(
+            colors: [Colors.white, jenisColor.withOpacity(0.03)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Baris utama: icon + foto (opsional) + info
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        jenisColor.withOpacity(0.1),
-                        jenisColor.withOpacity(0.05),
-                      ],
-                    ),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: jenisColor.withOpacity(0.2)),
-                  ),
-                  child: Icon(
-                    _getJenisIcon(item['jenis'] ?? ''),
-                    color: jenisColor,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                if (fotoUrl != null)
-                  Hero(
-                    tag: 'photo_${fotoUrl.hashCode}',
-                    child: GestureDetector(
-                      onTap: () => _showFullPhoto(fotoUrl),
-                      child: Container(
-                        height: 70,
-                        width: 70,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(fotoUrl, fit: BoxFit.cover),
-                        ),
-                      ),
-                    ),
-                  ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item['jenis'] ?? 'Tidak ada jenis',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 18,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Tanggal: $formattedDate',
-                        style: const TextStyle(
-                          color: Color(0xFF6B7280),
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Keterangan: ${item['keterangan'] ?? '-'}',
-                        style: const TextStyle(
-                          color: Color(0xFF6B7280),
-                          fontSize: 14,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (item['informasi']?.toString().isNotEmpty == true) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF3B82F6).withOpacity(0.05),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            'Info: ${item['informasi']}',
-                            style: const TextStyle(
-                              color: Color(0xFF3B82F6),
-                              fontWeight: FontWeight.w500,
-                              fontSize: 14,
-                            ),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Icon besar
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      jenisColor.withOpacity(0.2),
+                      jenisColor.withOpacity(0.1),
                     ],
                   ),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: jenisColor.withOpacity(0.4),
+                    width: 3,
+                  ),
                 ),
-              ],
-            ),
+                child: Icon(
+                  _getJenisIcon(item['jenis'] ?? ''),
+                  size: 48,
+                  color: jenisColor,
+                ),
+              ),
+              const SizedBox(width: 32),
 
-            // Dokumen badge (jika ada) → dipindah ke bawah agar tidak overflow
-            if (dokumenUrl != null) ...[
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Hero(
-                  tag: 'dokumen_${dokumenUrl.hashCode}',
-                  child: GestureDetector(
-                    onTap: () => _showFullDokumen(dokumenUrl),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
+              // Foto selfie
+              if (fotoUrl != null)
+                GestureDetector(
+                  onTap: () => _showFullPhoto(fotoUrl),
+                  child: Hero(
+                    tag: 'photo_${fotoUrl.hashCode}',
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Image.network(
+                        fotoUrl,
+                        width: 160,
+                        height: 160,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (_, child, progress) => progress == null
+                            ? child
+                            : const CircularProgressIndicator(),
                       ),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFFF59E0B).withOpacity(0.1),
-                            Colors.transparent,
-                          ],
+                    ),
+                  ),
+                ),
+              if (fotoUrl != null) const SizedBox(width: 32),
+
+              // Informasi utama
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item['jenis'] ?? 'Tidak ada jenis',
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Waktu: $formattedDate',
+                      style: const TextStyle(fontSize: 18, color: Colors.black),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Keterangan: ${item['keterangan'] ?? '-'}',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        color: Colors.black87,
+                      ),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (item['informasi']?.toString().isNotEmpty == true) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF3B82F6).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: const Color(0xFF3B82F6).withOpacity(0.3),
+                          ),
                         ),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: const Color(0xFFF59E0B).withOpacity(0.3),
+                        child: Text(
+                          'Informasi: ${item['informasi']}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Color(0xFF1E40AF),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.attachment_rounded,
-                            size: 18,
-                            color: Color(0xFFF59E0B),
-                          ),
-                          SizedBox(width: 6),
-                          Text(
-                            'Dokumen',
-                            style: TextStyle(
-                              color: Color(0xFFF59E0B),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+                    ],
+                  ],
+                ),
+              ),
+
+              // Kolom kanan: Status, Dokumen, Actions
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // Status Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          statusColor.withOpacity(0.2),
+                          statusColor.withOpacity(0.1),
                         ],
                       ),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(
+                        color: statusColor.withOpacity(0.5),
+                        width: 2,
+                      ),
                     ),
-                  ),
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 16),
-
-            // Status badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [statusColor.withOpacity(0.1), Colors.transparent],
-                ),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: statusColor.withOpacity(0.3)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    status == 'Disetujui'
-                        ? Icons.check_circle
-                        : status == 'Ditolak'
-                        ? Icons.cancel
-                        : Icons.pending,
-                    color: statusColor,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Status: $status',
-                    style: TextStyle(
-                      color: statusColor,
-                      fontWeight: FontWeight.w500,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Tombol aksi hanya untuk tab Waiting
-            if (showActions) ...[
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: ElevatedButton.icon(
-                        onPressed: () =>
-                            _updateStatus(item['id'].toString(), 'Disetujui'),
-                        icon: const Icon(Icons.check, size: 18),
-                        label: const Text('Setujui'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF10B981),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          status == 'Disetujui'
+                              ? Icons.check_circle_rounded
+                              : status == 'Ditolak'
+                              ? Icons.cancel_rounded
+                              : Icons.pending_rounded,
+                          color: statusColor,
+                          size: 28,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          status,
+                          style: TextStyle(
+                            color: statusColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
                           ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  if (dokumenUrl != null) ...[
+                    const SizedBox(height: 20),
+                    OutlinedButton.icon(
+                      onPressed: () => _showFullDokumen(dokumenUrl),
+                      icon: const Icon(Icons.attach_file_rounded, size: 20),
+                      label: const Text(
+                        'Lihat Dokumen',
+                        style: TextStyle(fontSize: 15),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFF59E0B),
+                        side: const BorderSide(
+                          color: Color(0xFFF59E0B),
+                          width: 2,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
                         ),
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: ElevatedButton.icon(
-                        onPressed: () =>
-                            _updateStatus(item['id'].toString(), 'Ditolak'),
-                        icon: const Icon(Icons.close, size: 18),
-                        label: const Text('Tolak'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFEF4444),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                  ],
+
+                  if (showActions) ...[
+                    const SizedBox(height: 32),
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () =>
+                              _updateStatus(item['id'].toString(), 'Disetujui'),
+                          icon: const Icon(Icons.thumb_up, size: 22),
+                          label: const Text(
+                            'Setujui',
+                            style: TextStyle(fontSize: 16),
                           ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 32,
+                              vertical: 18,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                            elevation: 6,
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 16),
+                        ElevatedButton.icon(
+                          onPressed: () =>
+                              _updateStatus(item['id'].toString(), 'Ditolak'),
+                          icon: const Icon(Icons.thumb_down, size: 22),
+                          label: const Text(
+                            'Tolak',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFEF4444),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 32,
+                              vertical: 18,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                            elevation: 6,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
+                  ],
                 ],
               ),
             ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHistoryTab() {
-    if (_loading && _history.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(
-          strokeWidth: 3,
-          color: Color(0xFF3B82F6),
-        ),
-      );
-    }
-    if (_history.isEmpty) {
-      return Center(
-        child: Container(
-          margin: const EdgeInsets.all(40),
-          padding: const EdgeInsets.all(40),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [const Color(0xFF3B82F6).withOpacity(0.05), Colors.white],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.2)),
           ),
-          child: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.history_toggle_off_rounded,
-                size: 80,
-                color: Color(0xFF9CA3AF),
-              ),
-              SizedBox(height: 20),
-              Text(
-                'Belum ada riwayat presensi',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF6B7280),
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Riwayat akan muncul setelah presensi tercatat',
-                style: TextStyle(color: Color(0xFF9CA3AF)),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      color: const Color(0xFF3B82F6),
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _history.length,
-        itemBuilder: (_, i) =>
-            _buildPresensiCard(_history[i] as Map<String, dynamic>),
-      ),
-    );
-  }
-
-  Widget _buildWaitingTab() {
-    if (_loading && _waitingPresensi.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(
-          strokeWidth: 3,
-          color: Color(0xFF3B82F6),
-        ),
-      );
-    }
-    if (_waitingPresensi.isEmpty) {
-      return Center(
-        child: Container(
-          margin: const EdgeInsets.all(40),
-          padding: const EdgeInsets.all(40),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [const Color(0xFF3B82F6).withOpacity(0.05), Colors.white],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.2)),
-          ),
-          child: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.pending_actions_rounded,
-                size: 80,
-                color: Color(0xFF9CA3AF),
-              ),
-              SizedBox(height: 20),
-              Text(
-                'Tidak ada presensi menunggu',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF6B7280),
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Semua presensi telah diproses',
-                style: TextStyle(color: Color(0xFF9CA3AF)),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      color: const Color(0xFF3B82F6),
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _waitingPresensi.length,
-        itemBuilder: (_, i) => _buildPresensiCard(
-          _waitingPresensi[i] as Map<String, dynamic>,
-          showActions: true,
         ),
       ),
     );
@@ -741,92 +553,267 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: Text(
-          widget.userName,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 20),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: Colors.white,
-        actions: [
-          Hero(
-            tag: 'refresh_detail',
-            child: IconButton(
-              icon: const Icon(Icons.refresh_rounded, size: 28),
-              onPressed: _loadData,
+      backgroundColor: Colors.grey[50],
+      body: Row(
+        children: [
+          // Sidebar Kiri
+          Container(
+            width: 300,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+            child: Column(
+              children: [
+                // Header Sidebar
+                Container(
+                  padding: const EdgeInsets.fromLTRB(32, 60, 32, 40),
+                  child: Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 36,
+                        backgroundColor: Colors.white24,
+                        child: Icon(
+                          Icons.person_rounded,
+                          size: 48,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.userName,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const Text(
+                              'Detail Presensi',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const Divider(color: Colors.white12, height: 1),
+
+                // Menu Tab
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    children: [
+                      ListTile(
+                        leading: const Icon(
+                          Icons.history_rounded,
+                          size: 28,
+                          color: Colors.white70,
+                        ),
+                        title: const Text(
+                          'Riwayat Presensi',
+                          style: TextStyle(color: Colors.white, fontSize: 18),
+                        ),
+                        selected: _tabController.index == 0,
+                        selectedTileColor: Colors.white.withOpacity(0.15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        onTap: () => _tabController.animateTo(0),
+                      ),
+                      ListTile(
+                        leading: const Icon(
+                          Icons.pending_actions_rounded,
+                          size: 28,
+                          color: Colors.white70,
+                        ),
+                        title: const Text(
+                          'Menunggu Persetujuan',
+                          style: TextStyle(color: Colors.white, fontSize: 18),
+                        ),
+                        selected: _tabController.index == 1,
+                        selectedTileColor: Colors.white.withOpacity(0.15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        onTap: () => _tabController.animateTo(1),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Konten Utama
+          Expanded(
+            child: Column(
+              children: [
+                // Header Atas dengan Tombol Back & Refresh
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 24,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      // Tombol Back
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.arrow_back_rounded, size: 32),
+                        tooltip: 'Kembali',
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.grey[200],
+                          padding: const EdgeInsets.all(16),
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      Text(
+                        _tabController.index == 0
+                            ? 'Riwayat Presensi'
+                            : 'Presensi Menunggu Persetujuan',
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (_loading)
+                        const CircularProgressIndicator(strokeWidth: 3),
+                      const SizedBox(width: 20),
+                      ElevatedButton.icon(
+                        onPressed: _loadData,
+                        icon: const Icon(Icons.refresh_rounded, size: 24),
+                        label: const Text(
+                          'Refresh',
+                          style: TextStyle(fontSize: 18),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF3B82F6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 28,
+                            vertical: 18,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Body Content
+                Expanded(
+                  child:
+                      _loading && (_history.isEmpty && _waitingPresensi.isEmpty)
+                      ? const Center(
+                          child: CircularProgressIndicator(strokeWidth: 4),
+                        )
+                      : TabBarView(
+                          controller: _tabController,
+                          physics: const NeverScrollableScrollPhysics(),
+                          children: [
+                            // Tab Riwayat
+                            _history.isEmpty
+                                ? Center(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: const [
+                                        Icon(
+                                          Icons.history_toggle_off_rounded,
+                                          size: 100,
+                                          color: Colors.grey,
+                                        ),
+                                        SizedBox(height: 24),
+                                        Text(
+                                          'Belum ada riwayat presensi',
+                                          style: TextStyle(
+                                            fontSize: 24,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    padding: const EdgeInsets.only(
+                                      top: 24,
+                                      bottom: 40,
+                                    ),
+                                    itemCount: _history.length,
+                                    itemBuilder: (_, i) => _buildPresensiCard(
+                                      _history[i] as Map<String, dynamic>,
+                                    ),
+                                  ),
+
+                            // Tab Waiting
+                            _waitingPresensi.isEmpty
+                                ? Center(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: const [
+                                        Icon(
+                                          Icons.pending_actions_rounded,
+                                          size: 100,
+                                          color: Colors.grey,
+                                        ),
+                                        SizedBox(height: 24),
+                                        Text(
+                                          'Tidak ada presensi menunggu persetujuan',
+                                          style: TextStyle(
+                                            fontSize: 24,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    padding: const EdgeInsets.only(
+                                      top: 24,
+                                      bottom: 40,
+                                    ),
+                                    itemCount: _waitingPresensi.length,
+                                    itemBuilder: (_, i) => _buildPresensiCard(
+                                      _waitingPresensi[i]
+                                          as Map<String, dynamic>,
+                                      showActions: true,
+                                    ),
+                                  ),
+                          ],
+                        ),
+                ),
+              ],
             ),
           ),
         ],
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                const Color(0xFF3B82F6).withOpacity(0.9),
-                const Color(0xFF3B82F6).withOpacity(0.6),
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Container(
-            color: const Color(0xFF3B82F6).withOpacity(0.8),
-            child: TabBar(
-              controller: _tabController,
-              indicator: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: Colors.white.withOpacity(0.2),
-              ),
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
-              tabs: const [
-                Tab(
-                  icon: Icon(Icons.history_rounded, size: 24),
-                  text: 'Riwayat',
-                ),
-                Tab(
-                  icon: Icon(Icons.pending_actions_rounded, size: 24),
-                  text: 'Waiting',
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [const Color(0xFF3B82F6).withOpacity(0.05), Colors.white],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: _loading && _history.isEmpty && _waitingPresensi.isEmpty
-              ? const Center(
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                    color: Color(0xFF3B82F6),
-                  ),
-                )
-              : Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    MediaQuery.of(context).padding.top + 140,
-                    16,
-                    16,
-                  ),
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [_buildHistoryTab(), _buildWaitingTab()],
-                  ),
-                ),
-        ),
       ),
     );
   }

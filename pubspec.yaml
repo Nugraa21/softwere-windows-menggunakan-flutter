@@ -55,7 +55,9 @@ dependencies:
   # image_picker: ^1.0.7
   # encrypt: ^5.0.1
   # ========================================================
-
+  flutter_localizations:  # Tambahkan baris ini saja
+      sdk: flutter         # Pastikan ada "sdk: flutter" di bawahnya, indentasi benar!
+      
 dev_dependencies:
   flutter_test:
     sdk: flutter

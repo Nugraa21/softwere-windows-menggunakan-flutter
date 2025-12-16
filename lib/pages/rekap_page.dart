@@ -1,4 +1,3 @@
-// pages/rekap_page.dart (ENHANCED: Modern UI with neumorphic cards, subtle gradients, hero animations, enhanced stats dashboard, responsive DataTable, consistent styling without functional changes - FIXED: Removed extra comma in Row children and syntax issues)
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:excel/excel.dart' as xls;
@@ -14,17 +13,15 @@ class RekapPage extends StatefulWidget {
   State<RekapPage> createState() => _RekapPageState();
 }
 
-class _RekapPageState extends State<RekapPage> with TickerProviderStateMixin {
+class _RekapPageState extends State<RekapPage> {
   bool _loading = false;
   List<dynamic> _data = [];
   int _selectedMonth = DateTime.now().month;
   int _selectedYear = DateTime.now().year;
-
   final Map<String, Map<String, String>> _pivot = {};
   final List<String> _allDates = [];
-
-  late AnimationController _animController;
-  late Animation<double> _fadeAnimation;
+  final TextEditingController _searchC = TextEditingController();
+  List<String> _filteredNames = [];
 
   final Map<int, String> _indonesianMonths = {
     1: 'Januari',
@@ -54,19 +51,14 @@ class _RekapPageState extends State<RekapPage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeInOut),
-    );
     _loadRekap();
+    _searchC.addListener(_filterNames);
   }
 
   @override
   void dispose() {
-    _animController.dispose();
+    _searchC.removeListener(_filterNames);
+    _searchC.dispose();
     super.dispose();
   }
 
@@ -77,45 +69,45 @@ class _RekapPageState extends State<RekapPage> with TickerProviderStateMixin {
         month: _selectedMonth.toString().padLeft(2, '0'),
         year: _selectedYear.toString(),
       );
-      setState(() => _data = data);
-      _processPivot();
-      _animController.forward(from: 0);
+      setState(() {
+        _data = data;
+        _processPivot();
+        _filteredNames = List.from(_pivot.keys);
+        _filterNames();
+      });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal load data: $e'),
-            backgroundColor: const Color(0xFFEF4444),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            backgroundColor: Colors.redAccent,
           ),
         );
       }
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   void _processPivot() {
     _pivot.clear();
     _generateAllDates();
-
     for (var item in _data) {
       final nama = item['nama_lengkap'] ?? 'Tanpa Nama';
       final rawDate = item['created_at'] ?? '';
       final tgl = rawDate.length >= 10 ? rawDate.substring(0, 10) : '';
       final jenis = item['jenis'] ?? '-';
       final status = item['status'] ?? 'Pending';
-
       final shortJenis = _getShortJenis(jenis, status);
 
       _pivot.putIfAbsent(nama, () => {});
+
       if (tgl.isNotEmpty && _allDates.contains(tgl)) {
-        if (_pivot[nama]![tgl] == null ||
-            ['PF', 'I', 'R', 'PN'].indexOf(shortJenis) <
-                ['PF', 'I', 'R', 'PN'].indexOf(_pivot[nama]![tgl]!)) {
+        // Prioritas: PF > I > R > PN
+        final priority = {'PF': 0, 'I': 1, 'R': 2, 'PN': 3, 'PC': 4};
+        final current = _pivot[nama]![tgl];
+        if (current == null ||
+            (priority[shortJenis] ?? 99) < (priority[current] ?? 99)) {
           _pivot[nama]![tgl] = shortJenis;
         }
       }
@@ -123,23 +115,20 @@ class _RekapPageState extends State<RekapPage> with TickerProviderStateMixin {
   }
 
   String _getShortJenis(String jenis, String status) {
-    if (status != 'Disetujui') {
-      return 'NA'; // Tidak disetujui
-    }
-
+    if (status != 'Disetujui') return 'NA';
     switch (jenis) {
       case 'Masuk':
       case 'Pulang':
-        return 'R'; // Regular (hijau)
+        return 'R';
       case 'Penugasan_Masuk':
       case 'Penugasan_Pulang':
-        return 'PN'; // Penugasan Normal (oren)
+        return 'PN';
       case 'Penugasan_Full':
-        return 'PF'; // Penugasan Full (kuning)
+        return 'PF';
       case 'Izin':
-        return 'I'; // Izin (biru)
+        return 'I';
       case 'Pulang Cepat':
-        return 'PC'; // Pulang Cepat (amber, if needed)
+        return 'PC';
       default:
         return '-';
     }
@@ -161,32 +150,32 @@ class _RekapPageState extends State<RekapPage> with TickerProviderStateMixin {
 
   bool _isFuture(String dateStr) {
     final date = DateTime.parse(dateStr);
-    return date.isAfter(DateTime.now());
+    final now = DateTime.now();
+    return date.isAfter(DateTime(now.year, now.month, now.day));
   }
 
-  String _getIndonesianMonth(int month) {
-    return _indonesianMonths[month] ?? month.toString();
-  }
+  String _getIndonesianMonth(int month) =>
+      _indonesianMonths[month] ?? month.toString();
 
   String _getIndonesianDayAbbrev(DateTime date) {
-    final englishAbbrev = DateFormat('EEE', 'en_US').format(date);
-    return _dayNames[englishAbbrev] ?? englishAbbrev;
+    final english = DateFormat('EEE', 'en_US').format(date);
+    return _dayNames[english] ?? english;
   }
 
   Color _getFlutterColor(String code) {
     switch (code) {
       case 'R':
-        return Colors.green; // Hijau for regular
+        return const Color(0xFF10B981);
       case 'PN':
-        return Colors.orange; // Oren for penugasan normal
+        return const Color(0xFFF59E0B);
       case 'PF':
-        return Colors.amber; // Kuning for penugasan full
+        return const Color(0xFFFFB74D);
       case 'I':
-        return Colors.blue; // Biru for izin
+        return const Color(0xFF2196F3);
       case 'NA':
-        return Colors.red[700]!; // Abu merah for not approved
+        return const Color(0xFFD32F2F);
       case 'PC':
-        return Colors.amber;
+        return const Color(0xFFFFB74D);
       default:
         return Colors.grey;
     }
@@ -195,42 +184,37 @@ class _RekapPageState extends State<RekapPage> with TickerProviderStateMixin {
   String _getBgColorHex(String code) {
     switch (code) {
       case 'R':
-        return 'FF4CAF50'; // Hijau
+        return 'FF4CAF50';
       case 'PN':
-        return 'FFFF9800'; // Oren
+        return 'FFFF9800';
       case 'PF':
-        return 'FFFFB74D'; // Kuning
+        return 'FFFFB74D';
       case 'I':
-        return 'FF2196F3'; // Biru
+        return 'FF2196F3';
       case 'NA':
-        return 'FFD32F2F'; // Abu merah
+        return 'FFD32F2F';
       case 'PC':
         return 'FFFFB74D';
       default:
-        return 'FFE6E6E6'; // Abu-abu muda
+        return 'FFE6E6E6';
     }
   }
 
   xls.ExcelColor _getExcelBgColor(String code) {
-    final hex = _getBgColorHex(code);
-    return xls.ExcelColor.fromHexString('#$hex');
+    return xls.ExcelColor.fromHexString('#${_getBgColorHex(code)}');
   }
 
-  xls.ExcelColor _getExcelFontColor() {
-    return xls.ExcelColor.fromHexString('#FFFFFF');
-  }
+  xls.ExcelColor _getExcelFontColor() =>
+      xls.ExcelColor.fromHexString('#FFFFFF');
 
-  xls.ExcelColor _getExcelGrayColor(String hexFull) {
-    return xls.ExcelColor.fromHexString('#$hexFull');
-  }
+  xls.ExcelColor _getExcelGrayColor(String hexFull) =>
+      xls.ExcelColor.fromHexString('#$hexFull');
 
   Future<void> _exportToExcel() async {
     if (_data.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Data kosong!')));
-      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Data kosong!')));
       return;
     }
 
@@ -239,11 +223,9 @@ class _RekapPageState extends State<RekapPage> with TickerProviderStateMixin {
       var status = await Permission.manageExternalStorage.request();
       if (!status.isGranted) status = await Permission.storage.request();
       if (!status.isGranted) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Izin penyimpanan ditolak')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Izin penyimpanan ditolak')),
+        );
         return;
       }
       dir = Directory('/storage/emulated/0/Download');
@@ -263,7 +245,7 @@ class _RekapPageState extends State<RekapPage> with TickerProviderStateMixin {
     xls.Sheet lengkapSheet = excel['Rekap Lengkap'];
     xls.Sheet harianSheet = excel['Rekap Harian'];
 
-    // Sheet Rekap Lengkap (detail)
+    // Sheet Rekap Lengkap
     lengkapSheet.appendRow([
       xls.TextCellValue('No'),
       xls.TextCellValue('Nama'),
@@ -329,7 +311,7 @@ class _RekapPageState extends State<RekapPage> with TickerProviderStateMixin {
       }
       harianSheet.appendRow(row);
 
-      // Styling data cells (columns 1+)
+      // Styling cells
       for (int i = 0; i < values.length; i++) {
         final value = values[i];
         final cell = harianSheet.cell(
@@ -376,14 +358,18 @@ class _RekapPageState extends State<RekapPage> with TickerProviderStateMixin {
     }
   }
 
-  void _showMonthPicker() async {
+  Future<void> _showMonthPicker() async {
     final picked = await showDatePicker(
       context: context,
       initialDate: DateTime(_selectedYear, _selectedMonth),
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      builder: (context, child) =>
-          Theme(data: Theme.of(context), child: child!),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(primary: Color(0xFF3B82F6)),
+        ),
+        child: child!,
+      ),
     );
     if (picked != null &&
         (picked.month != _selectedMonth || picked.year != _selectedYear)) {
@@ -395,17 +381,41 @@ class _RekapPageState extends State<RekapPage> with TickerProviderStateMixin {
     }
   }
 
+  void _filterNames() {
+    final query = _searchC.text.toLowerCase().trim();
+    setState(() {
+      if (query.isEmpty) {
+        _filteredNames = List.from(_pivot.keys);
+      } else {
+        _filteredNames = _pivot.keys
+            .where((nama) => nama.toLowerCase().contains(query))
+            .toList();
+      }
+    });
+  }
+
+  int _getStats(String code) {
+    int count = 0;
+    for (var nama in _pivot.keys) {
+      for (var d in _allDates) {
+        if (!_isWeekend(d) && !_isFuture(d) && _pivot[nama]![d] == code)
+          count++;
+      }
+    }
+    return count;
+  }
+
   Widget _buildLegend() {
     return Wrap(
-      spacing: 16,
-      runSpacing: 8,
+      spacing: 20,
+      runSpacing: 12,
       children: [
-        _legendItem('R', 'Masuk/Pulang Biasa', Colors.green),
-        _legendItem('PN', 'Penugasan Masuk/Pulang', Colors.orange),
-        _legendItem('PF', 'Penugasan Full', Colors.amber),
-        _legendItem('I', 'Izin', Colors.blue),
-        _legendItem('NA', 'Tidak Disetujui', Colors.red[700]!),
-        _legendItem('-', 'Tidak Hadir', Colors.grey[400]!),
+        _legendItem('R', 'Masuk/Pulang Biasa', const Color(0xFF10B981)),
+        _legendItem('PN', 'Penugasan Masuk/Pulang', const Color(0xFFF59E0B)),
+        _legendItem('PF', 'Penugasan Full', const Color(0xFFFFB74D)),
+        _legendItem('I', 'Izin', const Color(0xFF2196F3)),
+        _legendItem('NA', 'Tidak Disetujui', const Color(0xFFD32F2F)),
+        _legendItem('-', 'Tidak Hadir', Colors.grey),
         _legendItem('Libur', 'Weekend', Colors.grey[300]!),
       ],
     );
@@ -416,459 +426,536 @@ class _RekapPageState extends State<RekapPage> with TickerProviderStateMixin {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 20,
-          height: 20,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Text(
-            '$code - $label',
-            style: const TextStyle(fontSize: 14),
-            overflow: TextOverflow.ellipsis,
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(color: color.withOpacity(0.6), width: 3),
           ),
         ),
+        const SizedBox(width: 12),
+        Text('$code - $label', style: const TextStyle(fontSize: 16)),
       ],
     );
   }
 
-  int _getStats(String code) {
-    int count = 0;
-    for (var nama in _pivot.keys) {
-      for (var d in _allDates) {
-        if (!_isWeekend(d) && !_isFuture(d) && _pivot[nama]![d] == code) {
-          count++;
-        }
-      }
-    }
-    return count;
+  Widget _buildStatCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return SizedBox(
+      width: 260,
+      child: Card(
+        elevation: 10,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 48, color: color),
+              const SizedBox(height: 20),
+              Text(
+                title,
+                style: const TextStyle(fontSize: 18, color: Colors.black54),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 40,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final totalTeachers = _pivot.keys.length;
-    final totalDays = _allDates.length;
+    final workDays = _allDates.where((d) => !_isWeekend(d)).length;
     final presentDays =
         _getStats('R') + _getStats('PN') + _getStats('PF') + _getStats('I');
-    final absentDays =
-        totalTeachers * (totalDays - _allDates.where(_isWeekend).length) -
-        presentDays;
+    final absentDays = totalTeachers * workDays - presentDays;
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text(
-          'Rekap Absensi Guru',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            onPressed: _showMonthPicker,
-            icon: const Icon(Icons.calendar_month_rounded),
-            tooltip: 'Pilih Bulan',
-          ),
-          Hero(
-            tag: 'refresh_rekap',
-            child: IconButton(
-              onPressed: _loadRekap,
-              icon: const Icon(Icons.refresh_rounded),
-              tooltip: 'Refresh',
+      backgroundColor: Colors.grey[50],
+      body: Row(
+        children: [
+          // Sidebar
+          Container(
+            width: 300,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
             ),
-          ),
-          IconButton(
-            onPressed: _exportToExcel,
-            icon: const Icon(Icons.download_rounded),
-            tooltip: 'Export Excel',
-          ),
-          const SizedBox(width: 8),
-        ],
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                const Color(0xFF3B82F6).withOpacity(0.9),
-                const Color(0xFF3B82F6).withOpacity(0.6),
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
-        ),
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [const Color(0xFF3B82F6).withOpacity(0.05), Colors.white],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: _loading
-            ? const Center(
-                child: CircularProgressIndicator(
-                  strokeWidth: 3,
-                  color: Color(0xFF3B82F6),
-                ),
-              )
-            : _data.isEmpty
-            ? Center(
-                child: Container(
-                  margin: const EdgeInsets.all(40),
-                  padding: const EdgeInsets.all(40),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF3B82F6).withOpacity(0.05),
-                        Colors.white,
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: const Color(0xFF3B82F6).withOpacity(0.2),
-                      width: 1,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.fromLTRB(32, 60, 32, 40),
+                  child: Row(
                     children: [
-                      Icon(
-                        Icons.event_busy_rounded,
-                        size: 80,
-                        color: const Color(0xFF9CA3AF),
-                      ),
-                      const SizedBox(height: 20),
-                      const Text(
-                        'Tidak ada data untuk periode ini',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF6B7280),
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF3B82F6), Color(0xFF1E40AF)],
+                          ),
+                          borderRadius: BorderRadius.all(Radius.circular(20)),
+                        ),
+                        child: const Icon(
+                          Icons.summarize_rounded,
+                          size: 52,
+                          color: Colors.white,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Coba pilih bulan lain atau tunggu data baru',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: const Color(0xFF9CA3AF),
+                      const SizedBox(width: 20),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Rekap Absensi',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              'Bulanan',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
                         ),
-                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
                 ),
-              )
-            : FadeTransition(
-                opacity: _fadeAnimation,
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    MediaQuery.of(context).padding.top + 80,
-                    16,
-                    32,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Stats Dashboard Cards
-                      const SizedBox(height: 24),
-                      // Info Card Periode
-                      Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.white,
-                              Colors.white.withOpacity(0.95),
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 15,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
+                const Divider(color: Colors.white12),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text(
+                          'Periode',
+                          style: TextStyle(color: Colors.white70, fontSize: 18),
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Periode Rekap',
-                                    style: TextStyle(
-                                      color: const Color(0xFF6B7280),
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  Text(
-                                    '${_getIndonesianMonth(_selectedMonth)} $_selectedYear',
-                                    style: const TextStyle(
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF1F2937),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    'Total Entri',
-                                    style: TextStyle(
-                                      color: const Color(0xFF6B7280),
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  Text(
-                                    '${_data.length}',
-                                    style: TextStyle(
-                                      fontSize: 36,
-                                      fontWeight: FontWeight.w700,
-                                      color: const Color(0xFF3B82F6),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                        const SizedBox(height: 12),
+                        Text(
+                          '${_getIndonesianMonth(_selectedMonth)} $_selectedYear',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 40),
+                        const Text(
+                          'Total Guru',
+                          style: TextStyle(color: Colors.white70, fontSize: 18),
+                        ),
+                        Text(
+                          '$totalTeachers',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 48,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Main Content
+          Expanded(
+            child: Column(
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 40,
+                    vertical: 32,
+                  ),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 20,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.arrow_back_rounded, size: 36),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.grey[200],
+                          padding: const EdgeInsets.all(20),
+                        ),
+                      ),
+                      const SizedBox(width: 32),
+                      const Text(
+                        'Rekap Absensi Bulanan',
+                        style: TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      SizedBox(
+                        width: 400,
+                        child: TextField(
+                          controller: _searchC,
+                          decoration: InputDecoration(
+                            hintText: 'Cari nama guru...',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            suffixIcon: _searchC.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: _searchC.clear,
+                                  )
+                                : null,
+                            filled: true,
+                            fillColor: Colors.grey[100],
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(30),
+                              borderSide: BorderSide.none,
+                            ),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      // Legend Card
-                      Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.white,
-                              Colors.white.withOpacity(0.95),
+                      const SizedBox(width: 32),
+                      ElevatedButton.icon(
+                        onPressed: _showMonthPicker,
+                        icon: const Icon(Icons.calendar_month_rounded),
+                        label: const Text('Pilih Bulan'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF3B82F6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 20,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton.icon(
+                        onPressed: _loadRekap,
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Refresh'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF3B82F6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 20,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton.icon(
+                        onPressed: _exportToExcel,
+                        icon: const Icon(Icons.download_rounded),
+                        label: const Text('Export Excel'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF10B981),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 20,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Body
+                Expanded(
+                  child: _loading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 5,
+                            color: Color(0xFF3B82F6),
+                          ),
+                        )
+                      : _data.isEmpty
+                      ? const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.event_busy_rounded,
+                                size: 140,
+                                color: Colors.grey,
+                              ),
+                              SizedBox(height: 40),
+                              Text(
+                                'Tidak ada data rekap',
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              Text('Pilih periode lain atau refresh'),
                             ],
                           ),
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 15,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
+                        )
+                      : SingleChildScrollView(
+                          padding: const EdgeInsets.all(40),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
+                                'Statistik Bulanan',
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              Wrap(
+                                spacing: 24,
+                                runSpacing: 24,
+                                children: [
+                                  _buildStatCard(
+                                    'Total Guru',
+                                    '$totalTeachers',
+                                    Icons.people_rounded,
+                                    const Color(0xFF3B82F6),
+                                  ),
+                                  _buildStatCard(
+                                    'Hari Kerja',
+                                    '$workDays',
+                                    Icons.calendar_today_rounded,
+                                    const Color(0xFF10B981),
+                                  ),
+                                  _buildStatCard(
+                                    'Hadir',
+                                    '$presentDays',
+                                    Icons.check_circle_rounded,
+                                    const Color(0xFF10B981),
+                                  ),
+                                  _buildStatCard(
+                                    'Absen',
+                                    '$absentDays',
+                                    Icons.cancel_rounded,
+                                    const Color(0xFFEF4444),
+                                  ),
+                                  _buildStatCard(
+                                    'Izin',
+                                    '${_getStats('I')}',
+                                    Icons.sick_rounded,
+                                    const Color(0xFF2196F3),
+                                  ),
+                                  _buildStatCard(
+                                    'Penugasan',
+                                    '${_getStats('PN') + _getStats('PF')}',
+                                    Icons.assignment_rounded,
+                                    const Color(0xFF8B5CF6),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 48),
+                              const Text(
                                 'Keterangan',
                                 style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF1F2937),
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const SizedBox(height: 16),
-                              _buildLegend(),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                      // Title
-                      const Text(
-                        'Rekap Harian Guru',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1F2937),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // DataTable Card
-                      Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.white,
-                              Colors.white.withOpacity(0.95),
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 15,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: DataTable(
-                              headingRowHeight: 70,
-                              dataRowHeight: 70,
-                              columnSpacing: 12,
-                              headingTextStyle: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                                color: Color(0xFF1F2937),
-                              ),
-                              columns: [
-                                const DataColumn(
-                                  label: Text(
-                                    'Nama Guru',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF1F2937),
-                                    ),
-                                  ),
+                              const SizedBox(height: 24),
+                              Card(
+                                elevation: 10,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(28),
                                 ),
-                                ..._allDates.map((d) {
-                                  final dayNum = d.substring(8);
-                                  final isWeekend = _isWeekend(d);
-                                  final date = DateTime.parse(d);
-                                  final dayAbbrev = _getIndonesianDayAbbrev(
-                                    date,
-                                  );
-                                  return DataColumn(
-                                    label: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Text(
-                                          dayNum,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 16,
-                                            color: Color(0xFF1F2937),
-                                          ),
-                                        ),
-                                        Text(
-                                          dayAbbrev,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: isWeekend
-                                                ? const Color(0xFFEF4444)
-                                                : const Color(0xFF6B7280),
-                                          ),
-                                        ),
-                                      ],
+                                child: Padding(
+                                  padding: const EdgeInsets.all(32),
+                                  child: _buildLegend(),
+                                ),
+                              ),
+                              const SizedBox(height: 48),
+                              const Text(
+                                'Rekap Harian',
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              Card(
+                                elevation: 12,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(28),
+                                ),
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: DataTable(
+                                    headingRowHeight: 80,
+                                    dataRowHeight: 80,
+                                    columnSpacing: 20,
+                                    headingTextStyle: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
                                     ),
-                                  );
-                                }),
-                              ],
-                              rows: (_pivot.keys.toList()..sort()).map((nama) {
-                                return DataRow(
-                                  cells: [
-                                    DataCell(
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 8,
-                                        ),
-                                        child: Text(
-                                          nama,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 15,
-                                          ),
-                                        ),
+                                    columns: [
+                                      const DataColumn(
+                                        label: Text('Nama Guru'),
                                       ),
-                                    ),
-                                    ..._allDates.map((d) {
-                                      if (_isWeekend(d)) {
-                                        return DataCell(
-                                          Center(
-                                            child: Container(
-                                              padding: const EdgeInsets.all(4),
-                                              decoration: BoxDecoration(
-                                                color: Colors.grey[100],
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
+                                      ..._allDates.map((d) {
+                                        final day = int.parse(d.substring(8));
+                                        final date = DateTime.parse(d);
+                                        final abbrev = _getIndonesianDayAbbrev(
+                                          date,
+                                        );
+                                        return DataColumn(
+                                          label: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Text(
+                                                '$day',
+                                                style: const TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
                                               ),
-                                              child: const Text(
-                                                'Libur',
+                                              Text(
+                                                abbrev,
                                                 style: TextStyle(
-                                                  color: Color(0xFF6B7280),
-                                                  fontStyle: FontStyle.italic,
+                                                  color: _isWeekend(d)
+                                                      ? Colors.red
+                                                      : Colors.grey[600],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }),
+                                    ],
+                                    rows: (_filteredNames..sort()).map((nama) {
+                                      return DataRow(
+                                        cells: [
+                                          DataCell(
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 12,
+                                                  ),
+                                              child: Text(
+                                                nama,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 18,
                                                 ),
                                               ),
                                             ),
                                           ),
-                                        );
-                                      }
-                                      if (_isFuture(d)) {
-                                        return const DataCell(Text(''));
-                                      }
-                                      final val = _pivot[nama]![d] ?? '-';
-                                      final flutterColor = _getFlutterColor(
-                                        val,
-                                      );
-
-                                      return DataCell(
-                                        Center(
-                                          child: val == '-'
-                                              ? Text(
-                                                  val,
-                                                  style: TextStyle(
-                                                    color: const Color(
-                                                      0xFF6B7280,
-                                                    ),
-                                                  ),
-                                                )
-                                              : Container(
-                                                  width: 40,
-                                                  height: 40,
-                                                  decoration: BoxDecoration(
-                                                    color: flutterColor
-                                                        .withOpacity(0.2),
-                                                    shape: BoxShape.circle,
-                                                    border: Border.all(
-                                                      color: flutterColor
-                                                          .withOpacity(0.5),
-                                                      width: 1,
-                                                    ),
-                                                  ),
-                                                  child: Center(
-                                                    child: Text(
-                                                      val,
-                                                      style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                        color: flutterColor,
-                                                        fontSize: 18,
-                                                      ),
+                                          ..._allDates.map((d) {
+                                            if (_isWeekend(d)) {
+                                              return const DataCell(
+                                                Center(
+                                                  child: Text(
+                                                    'Libur',
+                                                    style: TextStyle(
+                                                      color: Colors.grey,
+                                                      fontStyle:
+                                                          FontStyle.italic,
                                                     ),
                                                   ),
                                                 ),
-                                        ),
+                                              );
+                                            }
+                                            if (_isFuture(d))
+                                              return const DataCell(Text(''));
+                                            final val = _pivot[nama]![d] ?? '-';
+                                            final color = _getFlutterColor(val);
+                                            return DataCell(
+                                              Center(
+                                                child: val == '-'
+                                                    ? const Text(
+                                                        '-',
+                                                        style: TextStyle(
+                                                          color: Colors.grey,
+                                                        ),
+                                                      )
+                                                    : Container(
+                                                        width: 50,
+                                                        height: 50,
+                                                        decoration: BoxDecoration(
+                                                          color: color
+                                                              .withOpacity(0.2),
+                                                          shape:
+                                                              BoxShape.circle,
+                                                          border: Border.all(
+                                                            color: color
+                                                                .withOpacity(
+                                                                  0.6,
+                                                                ),
+                                                            width: 3,
+                                                          ),
+                                                        ),
+                                                        child: Center(
+                                                          child: Text(
+                                                            val,
+                                                            style: TextStyle(
+                                                              color: color,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize: 20,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                              ),
+                                            );
+                                          }),
+                                        ],
                                       );
-                                    }),
-                                  ],
-                                );
-                              }).toList(),
-                            ),
+                                    }).toList(),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 40),
-                    ],
-                  ),
                 ),
-              ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

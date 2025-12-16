@@ -1,5 +1,6 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'; // Sudah ada
+
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
 import 'pages/dashboard_page.dart';
@@ -64,11 +65,22 @@ class _SkadutaAppState extends State<SkadutaApp> {
     return MaterialApp(
       title: 'Skaduta Presensi',
       debugShowCheckedModeBanner: false,
+
+      // Localization untuk date picker bahasa Indonesia
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('id', 'ID'), Locale('en', 'US')],
+      locale: const Locale('id', 'ID'),
+
       theme: ThemeData(
         colorSchemeSeed: Colors.blueGrey,
         useMaterial3: true,
         scaffoldBackgroundColor: Colors.grey.shade50,
         textTheme: const TextTheme(bodyLarge: TextStyle(fontSize: 18)),
+        // PERBAIKAN DI SINI: Gunakan CardThemeData, bukan CardTheme
         cardTheme: const CardThemeData(elevation: 6),
         appBarTheme: const AppBarTheme(
           centerTitle: true,
@@ -76,6 +88,7 @@ class _SkadutaAppState extends State<SkadutaApp> {
           foregroundColor: Colors.white,
         ),
       ),
+
       home: _initialPage,
       routes: {
         '/login': (_) => const LoginPage(),
