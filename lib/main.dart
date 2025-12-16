@@ -1,5 +1,7 @@
+import 'dart:io'; // Untuk deteksi platform
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart'; // Sudah ada
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:window_manager/window_manager.dart'; // IMPORT INI
 
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
@@ -10,12 +12,40 @@ import 'pages/history_page.dart';
 import 'pages/admin_presensi_page.dart';
 import 'pages/admin_user_list_page.dart';
 import 'pages/rekap_page.dart';
+import 'pages/rekap_hari_ini_page.dart';
 import 'models/user_model.dart';
 import 'api/api_service.dart';
-import 'pages/rekap_hari_ini_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Hanya aktifkan di desktop (Windows, macOS, Linux)
+  if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+    await windowManager.ensureInitialized();
+
+    WindowOptions windowOptions = const WindowOptions(
+      size: Size(1920, 1080), // UKURAN TETAP 1920x1080
+      center: true, // Di tengah layar
+      backgroundColor: Colors.transparent,
+      skipTaskbar: false,
+      title: 'Skaduta Presensi',
+      minimumSize: Size(
+        1920,
+        1080,
+      ), // Minimal ukuran = maksimal (biar tidak bisa kecil)
+      maximumSize: Size(1920, 1080), // Maksimal ukuran = 1920x1080
+      titleBarStyle: TitleBarStyle.normal,
+    );
+
+    windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.setResizable(false); // Tidak bisa di-resize
+      await windowManager.setMaximizable(false); // Tombol maximize nonaktif
+      await windowManager.setMinimizable(true); // Minimize tetap bisa
+      await windowManager.focus();
+      await windowManager.show();
+    });
+  }
+
   runApp(const SkadutaApp());
 }
 
@@ -67,7 +97,6 @@ class _SkadutaAppState extends State<SkadutaApp> {
       title: 'Skaduta Presensi',
       debugShowCheckedModeBanner: false,
 
-      // Localization untuk date picker bahasa Indonesia
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -81,7 +110,6 @@ class _SkadutaAppState extends State<SkadutaApp> {
         useMaterial3: true,
         scaffoldBackgroundColor: Colors.grey.shade50,
         textTheme: const TextTheme(bodyLarge: TextStyle(fontSize: 18)),
-        // PERBAIKAN DI SINI: Gunakan CardThemeData, bukan CardTheme
         cardTheme: const CardThemeData(elevation: 6),
         appBarTheme: const AppBarTheme(
           centerTitle: true,

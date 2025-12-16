@@ -35,8 +35,9 @@ dependencies:
 
   # Sementara di-comment dulu ya dependency lama-nya biar gak bingung 
   device_info_plus: ^10.1.0
-
-  # ================ dependency lama =======================
+  window_manager: ^0.3.8  # Tambahkan ini
+  # ================ dependenc
+  y lama =======================
   # shared_preferences: ^2.3.2   # For storing user data/device ID locally
   # device_info_plus: ^10.1.2    # For generating unique device ID (used in login/register)
   # uuid: ^4.0.0                 # For generating unique IDs
