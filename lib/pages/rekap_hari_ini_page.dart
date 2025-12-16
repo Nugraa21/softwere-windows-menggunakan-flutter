@@ -1,4 +1,4 @@
-// lib/pages/rekap_hari_ini_page.dart (VERSI FINAL - EXPORT EXCEL BERFUNGSI + UI KEREN - SESUAI DENGAN REKAP BULANAN)
+// lib/pages/rekap_hari_ini_page.dart (VERSI FINAL + KALENDER TANGGAL)
 
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -18,6 +18,8 @@ class RekapHariIniPage extends StatefulWidget {
 
 class _RekapHariIniPageState extends State<RekapHariIniPage> {
   bool _loading = true;
+
+  DateTime _selectedDate = DateTime.now(); // Tanggal yang sedang ditampilkan
 
   int _totalUsers = 0;
   int _masukBiasa = 0;
@@ -42,11 +44,11 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
     try {
       final allPresensi = await ApiService.getAllPresensi();
       final users = await ApiService.getUsers();
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final selectedDay = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
       final todayData = allPresensi.where((p) {
         final created = (p['created_at'] ?? '').toString();
-        return created.length >= 10 && created.substring(0, 10) == today;
+        return created.length >= 10 && created.substring(0, 10) == selectedDay;
       }).toList();
 
       _presensiToday = todayData;
@@ -99,6 +101,28 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
     }
   }
 
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(primary: Color(0xFF3B82F6)),
+        ),
+        child: child!,
+      ),
+    );
+
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+      });
+      _loadStats();
+    }
+  }
+
   String _getBgColorHex(String status) {
     switch (status) {
       case 'Disetujui':
@@ -124,7 +148,7 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
     if (_presensiToday.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Tidak ada data presensi hari ini untuk diexport!'),
+          content: Text('Tidak ada data presensi untuk tanggal ini!'),
         ),
       );
       return;
@@ -146,13 +170,13 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
       dir = await getApplicationDocumentsDirectory();
     }
 
-    final todayStr = DateFormat('dd MMMM yyyy', 'id_ID').format(DateTime.now());
-    final fileName = 'Rekap_Presensi_Hari_Ini_$todayStr.xlsx';
+    final dateStr = DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate);
+    final fileName = 'Rekap_Presensi_$dateStr.xlsx';
     final path = '${dir.path}/$fileName';
 
     var excel = xls.Excel.createExcel();
     excel.delete('Sheet1');
-    xls.Sheet sheet = excel['Rekap Hari Ini'];
+    xls.Sheet sheet = excel['Rekap Tanggal Ini'];
 
     // Header
     sheet.appendRow([
@@ -165,7 +189,7 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
       xls.TextCellValue('Keterangan'),
     ]);
 
-    // Styling header (sama seperti rekap bulanan)
+    // Styling header
     for (int i = 0; i < 7; i++) {
       final cell = sheet.cell(
         xls.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0),
@@ -200,7 +224,7 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
         xls.TextCellValue(keterangan),
       ]);
 
-      // Styling baris berdasarkan status (sama seperti rekap bulanan)
+      // Styling baris berdasarkan status
       for (int i = 0; i < 7; i++) {
         final cell = sheet.cell(
           xls.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: no),
@@ -423,10 +447,10 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width > 1200;
-    final todayStr = DateFormat(
+    final selectedDayStr = DateFormat(
       'EEEE, dd MMMM yyyy',
       'id_ID',
-    ).format(DateTime.now());
+    ).format(_selectedDate);
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -476,7 +500,7 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
                               ),
                             ),
                             Text(
-                              'Hari Ini',
+                              'Harian',
                               style: TextStyle(
                                 color: Colors.white70,
                                 fontSize: 16,
@@ -501,7 +525,7 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          todayStr,
+                          selectedDayStr,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: Colors.white,
@@ -562,13 +586,29 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
                       ),
                       const SizedBox(width: 32),
                       Text(
-                        'Rekap Presensi Hari Ini - $todayStr',
+                        'Rekap Presensi Harian - $selectedDayStr',
                         style: TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const Spacer(),
+                      ElevatedButton.icon(
+                        onPressed: _pickDate,
+                        icon: const Icon(Icons.calendar_today_rounded),
+                        label: const Text('Pilih Tanggal'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(0xFF3B82F6),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 20,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
                       ElevatedButton.icon(
                         onPressed: _loadStats,
                         icon: const Icon(Icons.refresh_rounded),
@@ -624,14 +664,14 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
                               ),
                               SizedBox(height: 40),
                               Text(
-                                'Belum ada presensi hari ini',
+                                'Belum ada presensi pada tanggal ini',
                                 style: TextStyle(
                                   fontSize: 28,
                                   color: Colors.grey,
                                 ),
                               ),
                               Text(
-                                'Tunggu karyawan melakukan absen',
+                                'Tunggu karyawan melakukan absen atau pilih tanggal lain',
                                 style: TextStyle(
                                   fontSize: 18,
                                   color: Colors.grey,
@@ -751,12 +791,12 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
                                 ),
                               ),
                               _buildStatCard(
-                                'Ditolak Hari Ini',
+                                'Ditolak',
                                 '$_ditolak',
                                 Icons.cancel_rounded,
                                 Color(0xFFEF4444),
                                 onTap: () => _showDetail(
-                                  'Ditolak Hari Ini',
+                                  'Ditolak',
                                   _presensiToday
                                       .where((p) => p['status'] == 'Ditolak')
                                       .toList(),
