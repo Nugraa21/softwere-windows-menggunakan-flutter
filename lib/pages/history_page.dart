@@ -1,4 +1,4 @@
-// lib/pages/history_page.dart (FINAL: UI konsisten dengan admin pages lain + admin lihat global history)
+// lib/pages/history_page.dart (FINAL: Admin punya search nama user + detail presensi)
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api/api_service.dart';
@@ -20,6 +20,12 @@ class _HistoryPageState extends State<HistoryPage>
   List<dynamic> _allPresensi = [];
   List<dynamic> _waitingPresensi = [];
 
+  // Search feature (khusus admin)
+  final TextEditingController _searchC = TextEditingController();
+  List<dynamic> _searchResults = [];
+  String _searchQuery = '';
+  bool _isSearching = false;
+
   bool get _isAdmin =>
       widget.user.role == 'admin' || widget.user.role == 'superadmin';
 
@@ -30,12 +36,31 @@ class _HistoryPageState extends State<HistoryPage>
       _tabController = TabController(length: 2, vsync: this);
     }
     _loadData();
+    _searchC.addListener(_onSearchChanged);
   }
 
   @override
   void dispose() {
     if (_isAdmin) _tabController.dispose();
+    _searchC.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged() {
+    final query = _searchC.text.trim().toLowerCase();
+    setState(() {
+      _searchQuery = query;
+      if (query.isEmpty) {
+        _isSearching = false;
+        _searchResults = [];
+      } else {
+        _isSearching = true;
+        _searchResults = _allPresensi.where((item) {
+          final nama = (item['nama_lengkap'] ?? '').toString().toLowerCase();
+          return nama.contains(query);
+        }).toList();
+      }
+    });
   }
 
   Future<void> _loadData() async {
@@ -164,12 +189,6 @@ class _HistoryPageState extends State<HistoryPage>
                           const Text(
                             'Dokumen tidak dapat ditampilkan',
                             style: TextStyle(fontSize: 18),
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.open_in_browser),
-                            label: const Text('Buka di Browser'),
-                            onPressed: () {},
                           ),
                         ],
                       ),
@@ -420,7 +439,7 @@ class _HistoryPageState extends State<HistoryPage>
 
   @override
   Widget build(BuildContext context) {
-    // User biasa: tampilan modern seperti sebelumnya
+    // User biasa
     if (!_isAdmin) {
       return Scaffold(
         backgroundColor: Colors.grey[50],
@@ -444,12 +463,12 @@ class _HistoryPageState extends State<HistoryPage>
       );
     }
 
-    // Admin / Superadmin: UI sama seperti halaman admin lain
+    // Admin / Superadmin
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: Row(
         children: [
-          // Sidebar kiri
+          // Sidebar
           Container(
             width: 300,
             decoration: const BoxDecoration(
@@ -551,7 +570,7 @@ class _HistoryPageState extends State<HistoryPage>
             ),
           ),
 
-          // Konten utama
+          // Konten Utama
           Expanded(
             child: Column(
               children: [
@@ -581,16 +600,53 @@ class _HistoryPageState extends State<HistoryPage>
                         ),
                       ),
                       const SizedBox(width: 32),
-                      Text(
-                        _tabController.index == 0
-                            ? 'Menunggu Persetujuan'
-                            : 'Riwayat Presensi Lengkap',
-                        style: const TextStyle(
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
+                      Expanded(
+                        child: Text(
+                          _isSearching
+                              ? 'Hasil pencarian: "$_searchQuery" (${_searchResults.length} entri)'
+                              : (_tabController.index == 0
+                                    ? 'Menunggu Persetujuan'
+                                    : 'Riwayat Presensi Lengkap'),
+                          style: const TextStyle(
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                      const Spacer(),
+                      SizedBox(
+                        width: 500,
+                        child: TextField(
+                          controller: _searchC,
+                          decoration: InputDecoration(
+                            hintText: 'Cari nama guru...',
+                            prefixIcon: const Icon(
+                              Icons.search_rounded,
+                              size: 28,
+                            ),
+                            suffixIcon: _searchC.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear_rounded),
+                                    onPressed: () {
+                                      _searchC.clear();
+                                      _onSearchChanged();
+                                    },
+                                  )
+                                : null,
+                            filled: true,
+                            fillColor: Colors.grey[100],
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(30),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 28,
+                              vertical: 20,
+                            ),
+                          ),
+                          style: const TextStyle(fontSize: 18),
+                        ),
+                      ),
+                      const SizedBox(width: 32),
                       ElevatedButton.icon(
                         onPressed: _loadData,
                         icon: const Icon(Icons.refresh_rounded),
@@ -656,40 +712,79 @@ class _HistoryPageState extends State<HistoryPage>
                                         _buildPresensiCard(_waitingPresensi[i]),
                                   ),
 
-                            // Tab Riwayat Lengkap
-                            _allPresensi.isEmpty
-                                ? const Center(
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.history_toggle_off_rounded,
-                                          size: 140,
-                                          color: Colors.grey,
-                                        ),
-                                        SizedBox(height: 40),
-                                        Text(
-                                          'Belum ada riwayat presensi',
-                                          style: TextStyle(
-                                            fontSize: 28,
-                                            color: Colors.grey,
+                            // Tab Riwayat Lengkap + Search
+                            _isSearching
+                                ? (_searchResults.isEmpty
+                                      ? const Center(
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                Icons.search_off_rounded,
+                                                size: 140,
+                                                color: Colors.grey,
+                                              ),
+                                              SizedBox(height: 40),
+                                              Text(
+                                                'Tidak ditemukan user dengan nama tersebut',
+                                                style: TextStyle(
+                                                  fontSize: 28,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                : ListView.builder(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      40,
-                                      32,
-                                      40,
-                                      60,
-                                    ),
-                                    itemCount: _allPresensi.length,
-                                    itemBuilder: (_, i) =>
-                                        _buildPresensiCard(_allPresensi[i]),
-                                  ),
+                                        )
+                                      : ListView.builder(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            40,
+                                            32,
+                                            40,
+                                            60,
+                                          ),
+                                          itemCount: _searchResults.length,
+                                          itemBuilder: (_, i) =>
+                                              _buildPresensiCard(
+                                                _searchResults[i],
+                                              ),
+                                        ))
+                                : (_allPresensi.isEmpty
+                                      ? const Center(
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                Icons
+                                                    .history_toggle_off_rounded,
+                                                size: 140,
+                                                color: Colors.grey,
+                                              ),
+                                              SizedBox(height: 40),
+                                              Text(
+                                                'Belum ada riwayat presensi',
+                                                style: TextStyle(
+                                                  fontSize: 28,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      : ListView.builder(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            40,
+                                            32,
+                                            40,
+                                            60,
+                                          ),
+                                          itemCount: _allPresensi.length,
+                                          itemBuilder: (_, i) =>
+                                              _buildPresensiCard(
+                                                _allPresensi[i],
+                                              ),
+                                        )),
                           ],
                         ),
                 ),
