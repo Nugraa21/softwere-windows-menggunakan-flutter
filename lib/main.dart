@@ -12,6 +12,7 @@ import 'pages/admin_user_list_page.dart';
 import 'pages/rekap_page.dart';
 import 'models/user_model.dart';
 import 'api/api_service.dart';
+import 'pages/rekap_hari_ini_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -94,6 +95,7 @@ class _SkadutaAppState extends State<SkadutaApp> {
         '/login': (_) => const LoginPage(),
         '/register': (_) => const RegisterPage(),
         '/admin-presensi': (_) => const AdminPresensiPage(),
+        '/rekap-hari-ini': (_) => const RekapHariIniPage(),
         '/rekap': (_) => const RekapPage(),
       },
       onGenerateRoute: (settings) {

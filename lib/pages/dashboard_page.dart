@@ -386,6 +386,59 @@ class _DashboardPageState extends State<DashboardPage>
                     ),
                   ),
                 ),
+                // Expanded(
+                //   child: ListView(
+                //     padding: const EdgeInsets.symmetric(horizontal: 16),
+                //     children: [
+                //       _sidebarItem(
+                //         Icons.home_rounded,
+                //         'Dashboard',
+                //         true,
+                //         () {},
+                //       ),
+                //       _sidebarItem(
+                //         Icons.history_rounded,
+                //         'Riwayat Presensi',
+                //         false,
+                //         () => Navigator.pushNamed(
+                //           context,
+                //           '/history',
+                //           arguments: widget.user,
+                //         ),
+                //       ),
+                //       if (isAdmin)
+                //         _sidebarItem(
+                //           Icons.list_alt_rounded,
+                //           'Kelola User',
+                //           false,
+                //           () =>
+                //               Navigator.pushNamed(context, '/admin-user-list'),
+                //         ),
+                //       if (isAdmin)
+                //         _sidebarItem(
+                //           Icons.verified_user_rounded,
+                //           'Konfirmasi Absensi',
+                //           false,
+                //           () => Navigator.pushNamed(context, '/admin-presensi'),
+                //         ),
+                //       if (isAdmin)
+                //         _sidebarItem(
+                //           Icons.table_chart_rounded,
+                //           'Rekap Absensi',
+                //           false,
+                //           () => Navigator.pushNamed(context, '/rekap'),
+                //         ),
+                //       if (widget.user.role == 'superadmin')
+                //         _sidebarItem(
+                //           Icons.supervisor_account_rounded,
+                //           'User Management',
+                //           false,
+                //           () =>
+                //               Navigator.pushNamed(context, '/user-management'),
+                //         ),
+                //     ],
+                //   ),
+                // ),
                 Expanded(
                   child: ListView(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -423,8 +476,15 @@ class _DashboardPageState extends State<DashboardPage>
                         ),
                       if (isAdmin)
                         _sidebarItem(
+                          Icons.today_rounded,
+                          'Rekap Hari Ini',
+                          false,
+                          () => Navigator.pushNamed(context, '/rekap-hari-ini'),
+                        ),
+                      if (isAdmin)
+                        _sidebarItem(
                           Icons.table_chart_rounded,
-                          'Rekap Absensi',
+                          'Rekap Bulanan',
                           false,
                           () => Navigator.pushNamed(context, '/rekap'),
                         ),

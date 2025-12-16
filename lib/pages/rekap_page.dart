@@ -1,3 +1,5 @@
+// lib/pages/rekap_page.dart (VERSI BERSIH - REKAP BULANAN SAJA - TANPA KONFLIK IMPORT)
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:excel/excel.dart' as xls;
@@ -103,7 +105,6 @@ class _RekapPageState extends State<RekapPage> {
       _pivot.putIfAbsent(nama, () => {});
 
       if (tgl.isNotEmpty && _allDates.contains(tgl)) {
-        // Prioritas: PF > I > R > PN
         final priority = {'PF': 0, 'I': 1, 'R': 2, 'PN': 3, 'PC': 4};
         final current = _pivot[nama]![tgl];
         if (current == null ||
