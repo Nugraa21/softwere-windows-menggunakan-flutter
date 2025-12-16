@@ -1,4 +1,5 @@
-// lib/pages/dashboard_page.dart (FINAL FIX TERAKHIR: No Overflow + Pending Pasti Muncul + UI Aman Semua Ukuran)
+// lib/pages/dashboard_page.dart (VERSI FINAL - MODAL LIST LEBIH MENARIK + HAPUS TOMBOL APPROVE/REJECT, GANTI STATUS TEXT SAJA)
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
@@ -21,9 +22,16 @@ class _DashboardPageState extends State<DashboardPage>
   late Animation<double> _fadeAnimation;
 
   int _totalUsers = 0;
-  int _todayPresensi = 0;
-  int _waitingApproval = 0;
-  int _presentToday = 0;
+  int _absenMasukBiasa = 0;
+  int _absenMasukPenugasan = 0;
+  int _pulangBiasa = 0;
+  int _pulangPenugasan = 0;
+  int _penugasanFull = 0;
+  int _izin = 0;
+  int _pendingAll = 0;
+  int _ditolakAll = 0;
+
+  List<dynamic> _allPresensiToday = [];
   bool _statsLoading = true;
 
   @override
@@ -31,12 +39,13 @@ class _DashboardPageState extends State<DashboardPage>
     super.initState();
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 1200),
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutExpo),
     );
     _animationController.forward();
+
     _getCurrentLocation();
     _updateTime();
     _loadStats();
@@ -106,19 +115,43 @@ class _DashboardPageState extends State<DashboardPage>
           return created.length >= 10 && created.substring(0, 10) == today;
         }).toList();
 
-        // FIX PASTI: Cek 'Pending' (case sensitive) dan fallback jika null
-        final waiting = allPresensi.where((p) {
-          final status = p['status']?.toString() ?? '';
-          return status == 'Waiting';
-        }).toList();
+        _allPresensiToday = todayData;
+
+        final masukBiasa = todayData
+            .where((p) => p['jenis'] == 'Masuk')
+            .toList();
+        final masukPenugasan = todayData
+            .where((p) => p['jenis'] == 'Penugasan_Masuk')
+            .toList();
+        final pulangBiasa = todayData
+            .where((p) => p['jenis'] == 'Pulang')
+            .toList();
+        final pulangPenugasan = todayData
+            .where((p) => p['jenis'] == 'Penugasan_Pulang')
+            .toList();
+        final penugasanFull = todayData
+            .where((p) => p['jenis'] == 'Penugasan_Full')
+            .toList();
+        final izinAll = todayData
+            .where((p) => p['jenis'] == 'Izin' || p['jenis'] == 'Pulang Cepat')
+            .toList();
+        final pendingAll = todayData
+            .where((p) => p['status'] == 'Waiting')
+            .toList();
+        final ditolakAll = todayData
+            .where((p) => p['status'] == 'Ditolak')
+            .toList();
 
         setState(() {
           _totalUsers = users.length;
-          _todayPresensi = todayData.length;
-          _waitingApproval = waiting.length;
-          _presentToday = todayData
-              .where((p) => p['status']?.toString() == 'Disetujui')
-              .length;
+          _absenMasukBiasa = masukBiasa.length;
+          _absenMasukPenugasan = masukPenugasan.length;
+          _pulangBiasa = pulangBiasa.length;
+          _pulangPenugasan = pulangPenugasan.length;
+          _penugasanFull = penugasanFull.length;
+          _izin = izinAll.length;
+          _pendingAll = pendingAll.length;
+          _ditolakAll = ditolakAll.length;
         });
       }
     } catch (e) {
@@ -128,6 +161,203 @@ class _DashboardPageState extends State<DashboardPage>
     }
   }
 
+  void _showUserList(String title, List<dynamic> presensiList) {
+    if (presensiList.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tidak ada data untuk "$title"'),
+          backgroundColor: Colors.orange[600],
+        ),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        height: MediaQuery.of(context).size.height * 0.9,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          children: [
+            // Handle + Title
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 60,
+              height: 6,
+              decoration: BoxDecoration(
+                color: Colors.grey[400],
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${presensiList.length} presensi',
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 20),
+
+            // List Presensi
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                itemCount: presensiList.length,
+                itemBuilder: (_, i) {
+                  final p = presensiList[i];
+
+                  final nama = p['nama_lengkap'] ?? 'Unknown';
+                  final username = p['username'] ?? '-';
+                  final jenis = p['jenis'] ?? '-';
+                  final status = p['status'] ?? 'Waiting';
+                  final waktu = p['created_at']?.toString() ?? '';
+                  final waktuFormatted = waktu.length >= 19
+                      ? waktu.substring(11, 19)
+                      : waktu;
+
+                  Color statusColor;
+                  String statusText;
+
+                  if (status == 'Disetujui') {
+                    statusColor = Colors.green;
+                    statusText = 'Disetujui';
+                  } else if (status == 'Ditolak') {
+                    statusColor = Colors.red;
+                    statusText = 'Ditolak';
+                  } else {
+                    statusColor = Colors.orange;
+                    statusText = 'Belum Disetujui';
+                  }
+
+                  final statusBg = statusColor.withOpacity(0.1);
+
+                  return Container(
+                    margin: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.08),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                      border: Border.all(color: statusColor.withOpacity(0.3)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Row(
+                        children: [
+                          // Avatar
+                          CircleAvatar(
+                            radius: 32,
+                            backgroundColor: statusColor.withOpacity(0.15),
+                            child: Text(
+                              nama[0].toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: statusColor,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 20),
+
+                          // Info
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  nama,
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Username: $username',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+                                Text(
+                                  'Jenis: $jenis',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: statusBg,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    statusText,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: statusColor,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Waktu: $waktuFormatted',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Icon status saja (tanpa tombol approve/reject)
+                          Icon(
+                            status == 'Disetujui'
+                                ? Icons.check_circle_rounded
+                                : status == 'Ditolak'
+                                ? Icons.cancel_rounded
+                                : Icons.pending_rounded,
+                            color: statusColor,
+                            size: 42,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width > 1200;
@@ -135,23 +365,24 @@ class _DashboardPageState extends State<DashboardPage>
         widget.user.role == 'admin' || widget.user.role == 'superadmin';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF1F5F9),
       body: Row(
         children: [
-          // Sidebar (sudah aman)
+          // Sidebar
           Container(
             width: 280,
-            color: const Color(0xFF1E293B),
+            color: const Color(0xFF0F172A),
             child: Column(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(28),
-                  child: const Text(
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(28, 40, 28, 20),
+                  child: Text(
                     'Skaduta',
                     style: TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
                       color: Colors.white,
+                      letterSpacing: 1.2,
                     ),
                   ),
                 ),
@@ -160,15 +391,16 @@ class _DashboardPageState extends State<DashboardPage>
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     children: [
                       _sidebarItem(
-                        icon: Icons.home_rounded,
-                        label: 'Dashboard',
-                        isSelected: true,
-                        onTap: () {},
+                        Icons.home_rounded,
+                        'Dashboard',
+                        true,
+                        () {},
                       ),
                       _sidebarItem(
-                        icon: Icons.history_rounded,
-                        label: 'Riwayat Presensi',
-                        onTap: () => Navigator.pushNamed(
+                        Icons.history_rounded,
+                        'Riwayat Presensi',
+                        false,
+                        () => Navigator.pushNamed(
                           context,
                           '/history',
                           arguments: widget.user,
@@ -176,45 +408,49 @@ class _DashboardPageState extends State<DashboardPage>
                       ),
                       if (isAdmin)
                         _sidebarItem(
-                          icon: Icons.list_alt_rounded,
-                          label: 'Kelola User',
-                          onTap: () =>
+                          Icons.list_alt_rounded,
+                          'Kelola User',
+                          false,
+                          () =>
                               Navigator.pushNamed(context, '/admin-user-list'),
                         ),
                       if (isAdmin)
                         _sidebarItem(
-                          icon: Icons.verified_user_rounded,
-                          label: 'Konfirmasi Absensi',
-                          onTap: () =>
-                              Navigator.pushNamed(context, '/admin-presensi'),
+                          Icons.verified_user_rounded,
+                          'Konfirmasi Absensi',
+                          false,
+                          () => Navigator.pushNamed(context, '/admin-presensi'),
                         ),
                       if (isAdmin)
                         _sidebarItem(
-                          icon: Icons.table_chart_rounded,
-                          label: 'Rekap Absensi',
-                          onTap: () => Navigator.pushNamed(context, '/rekap'),
+                          Icons.table_chart_rounded,
+                          'Rekap Absensi',
+                          false,
+                          () => Navigator.pushNamed(context, '/rekap'),
                         ),
                       if (widget.user.role == 'superadmin')
                         _sidebarItem(
-                          icon: Icons.supervisor_account_rounded,
-                          label: 'User Management',
-                          onTap: () =>
+                          Icons.supervisor_account_rounded,
+                          'User Management',
+                          false,
+                          () =>
                               Navigator.pushNamed(context, '/user-management'),
                         ),
                     ],
                   ),
                 ),
-                Container(
+                Divider(color: Colors.white10, height: 1),
+                Padding(
                   padding: const EdgeInsets.all(24),
                   child: Row(
                     children: [
-                      const CircleAvatar(
+                      CircleAvatar(
                         radius: 24,
                         backgroundColor: Colors.white24,
                         child: Icon(
                           Icons.person,
                           color: Colors.white,
-                          size: 30,
+                          size: 28,
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -224,21 +460,19 @@ class _DashboardPageState extends State<DashboardPage>
                           children: [
                             Text(
                               widget.user.namaLengkap,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 17,
+                                fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
                               overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
                             ),
                             Text(
                               widget.user.role.toUpperCase(),
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 14,
+                              style: TextStyle(
+                                color: Colors.grey[400],
+                                fontSize: 13,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -252,242 +486,337 @@ class _DashboardPageState extends State<DashboardPage>
 
           // Main Content
           Expanded(
-            child: Column(
-              children: [
-                // Header
-                Container(
-                  padding: const EdgeInsets.fromLTRB(40, 32, 40, 32),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 20,
-                        offset: Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Selamat datang kembali, ${widget.user.namaLengkap} 👋',
-                              style: const TextStyle(
-                                fontSize: 36,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1E293B),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              DateFormat(
-                                'EEEE, dd MMMM yyyy',
-                              ).format(DateTime.now()),
-                              style: const TextStyle(
-                                fontSize: 22,
-                                color: Colors.grey,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              _currentTime,
-                              style: const TextStyle(
-                                fontSize: 48,
-                                fontWeight: FontWeight.w300,
-                                color: Color(0xFF3B82F6),
-                                letterSpacing: 2,
-                              ),
-                            ),
-                          ],
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: Column(
+                children: [
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(48, 40, 48, 32),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 20,
+                          offset: Offset(0, 10),
                         ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 16,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(30),
-                          border: Border.all(
-                            color: Colors.blue.withOpacity(0.3),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.location_on_rounded,
-                              color: Color(0xFF3B82F6),
-                              size: 28,
-                            ),
-                            const SizedBox(width: 16),
-                            Text(
-                              _currentLocation,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            IconButton(
-                              icon: const Icon(Icons.refresh_rounded),
-                              onPressed: _getCurrentLocation,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 32),
-                      PopupMenuButton(
-                        icon: const CircleAvatar(
-                          radius: 28,
-                          backgroundColor: Color(0xFF3B82F6),
-                          child: Icon(
-                            Icons.person,
-                            color: Colors.white,
-                            size: 32,
-                          ),
-                        ),
-                        itemBuilder: (_) => [
-                          PopupMenuItem(
-                            onTap: () async {
-                              await ApiService.logout();
-                              if (mounted)
-                                Navigator.pushNamedAndRemoveUntil(
-                                  context,
-                                  '/login',
-                                  (r) => false,
-                                );
-                            },
-                            child: const Row(
-                              children: [
-                                Icon(Icons.logout_rounded, color: Colors.red),
-                                SizedBox(width: 12),
-                                Text('Logout'),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Body
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(40),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      ],
+                    ),
+                    child: Row(
                       children: [
-                        if (isAdmin) ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'Statistik Hari Ini',
+                              Text(
+                                'Selamat datang, ${widget.user.namaLengkap} 👋',
                                 style: TextStyle(
                                   fontSize: 32,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1E293B),
+                                  color: Color(0xFF0F172A),
                                 ),
                               ),
-                              ElevatedButton.icon(
-                                onPressed: _loadStats,
-                                icon: const Icon(Icons.refresh_rounded),
-                                label: const Text('Reload Data'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF3B82F6),
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 24,
-                                    vertical: 16,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(30),
-                                  ),
+                              const SizedBox(height: 8),
+                              Text(
+                                DateFormat(
+                                  'EEEE, dd MMMM yyyy',
+                                ).format(DateTime.now()),
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                _currentTime,
+                                style: TextStyle(
+                                  fontSize: 48,
+                                  fontWeight: FontWeight.w300,
+                                  color: Color(0xFF3B82F6),
+                                  letterSpacing: 3,
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 32),
-                          _statsLoading
-                              ? const Center(
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 5,
-                                    color: Color(0xFF3B82F6),
-                                  ),
-                                )
-                              : GridView.count(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  crossAxisCount: isWide ? 4 : 2,
-                                  childAspectRatio:
-                                      1.45, // Naikkan sedikit biar aman dari overflow
-                                  crossAxisSpacing: 32,
-                                  mainAxisSpacing: 32,
-                                  children: [
-                                    _premiumStatCard(
-                                      'Total User',
-                                      _totalUsers.toString(),
-                                      Icons.people_rounded,
-                                      const Color(0xFF3B82F6),
-                                    ),
-                                    _premiumStatCard(
-                                      'Presensi Hari Ini',
-                                      _todayPresensi.toString(),
-                                      Icons.how_to_reg_rounded,
-                                      const Color(0xFF10B981),
-                                    ),
-                                    _premiumStatCard(
-                                      'Menunggu Approval',
-                                      _waitingApproval.toString(),
-                                      Icons.pending_actions_rounded,
-                                      const Color(0xFFF59E0B),
-                                    ),
-                                    _premiumStatCard(
-                                      'Hadir Disetujui',
-                                      _presentToday.toString(),
-                                      Icons.check_circle_rounded,
-                                      const Color(0xFF10B981),
-                                    ),
-                                  ],
-                                ),
-                          const SizedBox(height: 60),
-                        ],
-                        const Text(
-                          'Quick Actions',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 16,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Color(0xFFEBF5FF),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: Color(0xFF3B82F6).withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.location_on_rounded,
+                                color: Color(0xFF3B82F6),
+                                size: 26,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                _currentLocation,
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(width: 12),
+                              IconButton(
+                                icon: Icon(Icons.refresh),
+                                onPressed: _getCurrentLocation,
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 32),
-                        GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: isWide ? 3 : 2,
-                                childAspectRatio: isWide
-                                    ? 1.55
-                                    : 1.45, // Naikkan lagi biar tidak overflow
-                                crossAxisSpacing: 40,
-                                mainAxisSpacing: 40,
+                        const SizedBox(width: 32),
+                        PopupMenuButton(
+                          icon: CircleAvatar(
+                            radius: 26,
+                            backgroundColor: Color(0xFF3B82F6),
+                            child: Icon(Icons.person, color: Colors.white),
+                          ),
+                          itemBuilder: (_) => [
+                            PopupMenuItem(
+                              onTap: () async {
+                                await ApiService.logout();
+                                if (mounted)
+                                  Navigator.pushNamedAndRemoveUntil(
+                                    context,
+                                    '/login',
+                                    (r) => false,
+                                  );
+                              },
+                              child: Row(
+                                children: [
+                                  Icon(Icons.logout, color: Colors.red),
+                                  SizedBox(width: 12),
+                                  Text('Logout'),
+                                ],
                               ),
-                          itemCount: _getCards().length,
-                          itemBuilder: (_, i) =>
-                              _premiumActionCard(_getCards()[i]),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 60),
                       ],
                     ),
                   ),
-                ),
-              ],
+
+                  // Body
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(48),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (isAdmin) ...[
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Statistik Hari Ini',
+                                  style: TextStyle(
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                                ElevatedButton.icon(
+                                  onPressed: _loadStats,
+                                  icon: Icon(Icons.refresh),
+                                  label: Text('Refresh'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Color(0xFF3B82F6),
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                      vertical: 16,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(30),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 32),
+                            _statsLoading
+                                ? Center(
+                                    child: CircularProgressIndicator(
+                                      color: Color(0xFF3B82F6),
+                                    ),
+                                  )
+                                : GridView.count(
+                                    shrinkWrap: true,
+                                    physics: NeverScrollableScrollPhysics(),
+                                    crossAxisCount: isWide ? 4 : 2,
+                                    childAspectRatio: 1.6,
+                                    crossAxisSpacing: 24,
+                                    mainAxisSpacing: 24,
+                                    children: [
+                                      _glassStatCard(
+                                        'Total Users',
+                                        _totalUsers.toString(),
+                                        Icons.people_rounded,
+                                        Color(0xFF3B82F6),
+                                      ),
+                                      _glassStatCard(
+                                        'Masuk Biasa',
+                                        _absenMasukBiasa.toString(),
+                                        Icons.login_rounded,
+                                        Color(0xFF10B981),
+                                        onTap: () => _showUserList(
+                                          'Absen Masuk Biasa',
+                                          _allPresensiToday
+                                              .where(
+                                                (p) => p['jenis'] == 'Masuk',
+                                              )
+                                              .toList(),
+                                        ),
+                                      ),
+                                      _glassStatCard(
+                                        'Masuk Penugasan',
+                                        _absenMasukPenugasan.toString(),
+                                        Icons.assignment_ind_rounded,
+                                        Color(0xFF8B5CF6),
+                                        onTap: () => _showUserList(
+                                          'Absen Masuk Penugasan',
+                                          _allPresensiToday
+                                              .where(
+                                                (p) =>
+                                                    p['jenis'] ==
+                                                    'Penugasan_Masuk',
+                                              )
+                                              .toList(),
+                                        ),
+                                      ),
+                                      _glassStatCard(
+                                        'Pulang Biasa',
+                                        _pulangBiasa.toString(),
+                                        Icons.logout_rounded,
+                                        Color(0xFFF59E0B),
+                                        onTap: () => _showUserList(
+                                          'Pulang Biasa',
+                                          _allPresensiToday
+                                              .where(
+                                                (p) => p['jenis'] == 'Pulang',
+                                              )
+                                              .toList(),
+                                        ),
+                                      ),
+                                      _glassStatCard(
+                                        'Pulang Penugasan',
+                                        _pulangPenugasan.toString(),
+                                        Icons.assignment_return_rounded,
+                                        Color(0xFF6366F1),
+                                        onTap: () => _showUserList(
+                                          'Pulang Penugasan',
+                                          _allPresensiToday
+                                              .where(
+                                                (p) =>
+                                                    p['jenis'] ==
+                                                    'Penugasan_Pulang',
+                                              )
+                                              .toList(),
+                                        ),
+                                      ),
+                                      _glassStatCard(
+                                        'Penugasan Full',
+                                        _penugasanFull.toString(),
+                                        Icons.assignment_turned_in_rounded,
+                                        Color(0xFF8B5CF6),
+                                        onTap: () => _showUserList(
+                                          'Penugasan Full Day',
+                                          _allPresensiToday
+                                              .where(
+                                                (p) =>
+                                                    p['jenis'] ==
+                                                    'Penugasan_Full',
+                                              )
+                                              .toList(),
+                                        ),
+                                      ),
+                                      _glassStatCard(
+                                        'Izin / Tidak Hadir',
+                                        _izin.toString(),
+                                        Icons.sick_rounded,
+                                        Color(0xFFEF4444),
+                                        onTap: () => _showUserList(
+                                          'Izin / Tidak Hadir',
+                                          _allPresensiToday
+                                              .where(
+                                                (p) =>
+                                                    p['jenis'] == 'Izin' ||
+                                                    p['jenis'] ==
+                                                        'Pulang Cepat',
+                                              )
+                                              .toList(),
+                                        ),
+                                      ),
+                                      _glassStatCard(
+                                        'Menunggu Approval',
+                                        _pendingAll.toString(),
+                                        Icons.pending_actions_rounded,
+                                        Color(0xFFF59E0B),
+                                        onTap: () => _showUserList(
+                                          'Menunggu Approval',
+                                          _allPresensiToday
+                                              .where(
+                                                (p) => p['status'] == 'Waiting',
+                                              )
+                                              .toList(),
+                                        ),
+                                      ),
+                                      _glassStatCard(
+                                        'Ditolak Hari Ini',
+                                        _ditolakAll.toString(),
+                                        Icons.cancel_rounded,
+                                        Color(0xFFEF4444),
+                                        onTap: () => _showUserList(
+                                          'Ditolak Hari Ini',
+                                          _allPresensiToday
+                                              .where(
+                                                (p) => p['status'] == 'Ditolak',
+                                              )
+                                              .toList(),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                            const SizedBox(height: 60),
+                          ],
+
+                          Text(
+                            'Quick Actions',
+                            style: TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: NeverScrollableScrollPhysics(),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: isWide ? 3 : 2,
+                                  childAspectRatio: 1.4,
+                                  crossAxisSpacing: 32,
+                                  mainAxisSpacing: 32,
+                                ),
+                            itemCount: _getCards().length,
+                            itemBuilder: (_, i) =>
+                                _modernActionCard(_getCards()[i]),
+                          ),
+                          const SizedBox(height: 60),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -495,174 +824,179 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  Widget _premiumStatCard(
+  // Glassmorphism Stat Card
+  Widget _glassStatCard(
     String title,
     String value,
     IconData icon,
-    Color color,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(
-          colors: [
-            Colors.white.withOpacity(0.95),
-            Colors.white.withOpacity(0.8),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border.all(color: color.withOpacity(0.4), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.15),
-            blurRadius: 30,
-            offset: const Offset(0, 15),
-          ),
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: color.withOpacity(0.5), width: 3),
-                ),
-                child: Icon(icon, size: 38, color: color),
-              ),
-              const Spacer(),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 52,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 21,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1E293B),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _premiumActionCard(Map<String, dynamic> card) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(32),
-        onTap: card['onTap'],
+    Color accent, {
+    VoidCallback? onTap,
+  }) {
+    return MouseRegion(
+      cursor: onTap != null
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
+      child: GestureDetector(
+        onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(28), // Kurangi padding sedikit
+          padding: EdgeInsets.all(24),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(32),
-            gradient: LinearGradient(
-              colors: [
-                Colors.white.withOpacity(0.9),
-                Colors.white.withOpacity(0.6),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            border: Border.all(
-              color: card['color'].withOpacity(0.4),
-              width: 2.5,
-            ),
+            color: Colors.white.withOpacity(0.7),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
             boxShadow: [
-              BoxShadow(
-                color: card['color'].withOpacity(0.2),
-                blurRadius: 40,
-                offset: const Offset(0, 20),
-              ),
               BoxShadow(
                 color: Colors.black.withOpacity(0.08),
                 blurRadius: 20,
-                offset: const Offset(0, 10),
+                offset: Offset(0, 10),
               ),
             ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      card['color'].withOpacity(0.25),
-                      card['color'].withOpacity(0.1),
-                    ],
+              Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: accent.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, size: 32, color: accent),
                   ),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: card['color'].withOpacity(0.6),
-                    width: 4,
+                  Spacer(),
+                  Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 44,
+                      fontWeight: FontWeight.bold,
+                      color: accent,
+                    ),
                   ),
-                ),
-                child: Icon(card['icon'], size: 52, color: card['color']),
+                ],
               ),
-              const SizedBox(height: 16),
+              Spacer(),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Modern Action Card
+  Widget _modernActionCard(Map<String, dynamic> card) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(28),
+        onTap: card['onTap'],
+        child: Container(
+          padding: EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 25,
+                offset: Offset(0, 15),
+              ),
+            ],
+            border: Border.all(color: card['color'].withOpacity(0.2), width: 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: card['color'].withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(card['icon'], size: 48, color: card['color']),
+              ),
+              SizedBox(height: 24),
               Text(
                 card['title'],
-                style: const TextStyle(
-                  fontSize: 24,
+                style: TextStyle(
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E293B),
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                card['subtitle'],
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.grey[600],
+                  height: 1.5,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: Text(
-                  card['subtitle'],
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF64748B),
-                    height: 1.5,
-                  ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(height: 16),
+              Spacer(),
               Align(
                 alignment: Alignment.centerRight,
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: card['color'].withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 30,
-                    color: Color(0xFF1E293B),
-                  ),
+                child: Icon(
+                  Icons.arrow_forward_rounded,
+                  color: card['color'],
+                  size: 36,
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Sidebar Item
+  Widget _sidebarItem(
+    IconData icon,
+    String label,
+    bool isSelected,
+    VoidCallback onTap,
+  ) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 6),
+      child: Material(
+        color: isSelected
+            ? Color(0xFF3B82F6).withOpacity(0.2)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? Colors.white : Colors.grey[400],
+                  size: 28,
+                ),
+                SizedBox(width: 18),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.grey[300],
+                    fontSize: 17,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -762,53 +1096,6 @@ class _DashboardPageState extends State<DashboardPage>
       ]);
     }
     return cards;
-  }
-
-  Widget _sidebarItem({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    bool isSelected = false,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Material(
-        color: isSelected
-            ? const Color(0xFF3B82F6).withOpacity(0.25)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
-            child: Row(
-              children: [
-                Icon(
-                  icon,
-                  color: isSelected ? Colors.white : Colors.grey[400],
-                  size: 30,
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.grey[300],
-                      fontSize: 18,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : FontWeight.w500,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   void _navigateToPresensi(String jenis) {
