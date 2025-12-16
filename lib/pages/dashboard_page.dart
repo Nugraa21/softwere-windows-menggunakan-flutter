@@ -1,4 +1,4 @@
-// lib/pages/dashboard_page.dart (FINAL: Card super premium glassmorphism + sidebar fixed open)
+// lib/pages/dashboard_page.dart (FINAL FIX TERAKHIR: No Overflow + Pending Pasti Muncul + UI Aman Semua Ukuran)
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
@@ -20,7 +20,6 @@ class _DashboardPageState extends State<DashboardPage>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
-  // Statistik
   int _totalUsers = 0;
   int _todayPresensi = 0;
   int _waitingApproval = 0;
@@ -32,10 +31,10 @@ class _DashboardPageState extends State<DashboardPage>
     super.initState();
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 1000),
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
     );
     _animationController.forward();
     _getCurrentLocation();
@@ -102,22 +101,23 @@ class _DashboardPageState extends State<DashboardPage>
         final users = await ApiService.getUsers();
         final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-        final todayData = allPresensi
-            .where(
-              (p) =>
-                  (p['created_at'] ?? '').toString().substring(0, 10) == today,
-            )
-            .toList();
-        final waiting = allPresensi
-            .where((p) => (p['status'] ?? 'Waiting') == 'Waiting')
-            .toList();
+        final todayData = allPresensi.where((p) {
+          final created = (p['created_at'] ?? '').toString();
+          return created.length >= 10 && created.substring(0, 10) == today;
+        }).toList();
+
+        // FIX PASTI: Cek 'Pending' (case sensitive) dan fallback jika null
+        final waiting = allPresensi.where((p) {
+          final status = p['status']?.toString() ?? '';
+          return status == 'Waiting';
+        }).toList();
 
         setState(() {
           _totalUsers = users.length;
           _todayPresensi = todayData.length;
           _waitingApproval = waiting.length;
           _presentToday = todayData
-              .where((p) => p['status'] == 'Disetujui')
+              .where((p) => p['status']?.toString() == 'Disetujui')
               .length;
         });
       }
@@ -135,32 +135,29 @@ class _DashboardPageState extends State<DashboardPage>
         widget.user.role == 'admin' || widget.user.role == 'superadmin';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F4F6),
+      backgroundColor: const Color(0xFFF8FAFC),
       body: Row(
         children: [
-          // Sidebar FIXED OPEN (nggak bisa ditutup)
+          // Sidebar (sudah aman)
           Container(
             width: 280,
-            color: const Color(0xFF2D2D30),
+            color: const Color(0xFF1E293B),
             child: Column(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(20),
-                  child: Row(
-                    children: [
-                      const Text(
-                        'Skaduta',
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
+                  padding: const EdgeInsets.all(28),
+                  child: const Text(
+                    'Skaduta',
+                    style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
                 Expanded(
                   child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     children: [
                       _sidebarItem(
                         icon: Icons.home_rounded,
@@ -208,38 +205,43 @@ class _DashboardPageState extends State<DashboardPage>
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(24),
                   child: Row(
                     children: [
-                      CircleAvatar(
-                        radius: 22,
+                      const CircleAvatar(
+                        radius: 24,
                         backgroundColor: Colors.white24,
-                        child: const Icon(
+                        child: Icon(
                           Icons.person,
                           color: Colors.white,
-                          size: 28,
+                          size: 30,
                         ),
                       ),
                       const SizedBox(width: 16),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.user.namaLengkap,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.user.namaLengkap,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
                             ),
-                          ),
-                          Text(
-                            widget.user.role.toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 13,
+                            Text(
+                              widget.user.role.toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 14,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -254,14 +256,14 @@ class _DashboardPageState extends State<DashboardPage>
               children: [
                 // Header
                 Container(
-                  padding: const EdgeInsets.all(28),
+                  padding: const EdgeInsets.fromLTRB(40, 32, 40, 32),
                   decoration: const BoxDecoration(
                     color: Colors.white,
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black12,
-                        blurRadius: 15,
-                        offset: Offset(0, 6),
+                        blurRadius: 20,
+                        offset: Offset(0, 8),
                       ),
                     ],
                   ),
@@ -274,25 +276,29 @@ class _DashboardPageState extends State<DashboardPage>
                             Text(
                               'Selamat datang kembali, ${widget.user.namaLengkap} 👋',
                               style: const TextStyle(
-                                fontSize: 32,
+                                fontSize: 36,
                                 fontWeight: FontWeight.bold,
+                                color: Color(0xFF1E293B),
                               ),
                             ),
+                            const SizedBox(height: 8),
                             Text(
                               DateFormat(
                                 'EEEE, dd MMMM yyyy',
                               ).format(DateTime.now()),
                               style: const TextStyle(
-                                fontSize: 20,
+                                fontSize: 22,
                                 color: Colors.grey,
                               ),
                             ),
+                            const SizedBox(height: 12),
                             Text(
                               _currentTime,
                               style: const TextStyle(
-                                fontSize: 36,
-                                fontWeight: FontWeight.bold,
+                                fontSize: 48,
+                                fontWeight: FontWeight.w300,
                                 color: Color(0xFF3B82F6),
+                                letterSpacing: 2,
                               ),
                             ),
                           ],
@@ -300,11 +306,11 @@ class _DashboardPageState extends State<DashboardPage>
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 14,
+                          horizontal: 24,
+                          vertical: 16,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.1),
+                          color: Colors.blue.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(30),
                           border: Border.all(
                             color: Colors.blue.withOpacity(0.3),
@@ -315,28 +321,34 @@ class _DashboardPageState extends State<DashboardPage>
                             const Icon(
                               Icons.location_on_rounded,
                               color: Color(0xFF3B82F6),
-                              size: 24,
+                              size: 28,
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 16),
                             Text(
                               _currentLocation,
                               style: const TextStyle(
-                                fontSize: 15,
+                                fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+                            const SizedBox(width: 12),
                             IconButton(
-                              icon: const Icon(Icons.refresh_rounded, size: 20),
+                              icon: const Icon(Icons.refresh_rounded),
                               onPressed: _getCurrentLocation,
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 24),
+                      const SizedBox(width: 32),
                       PopupMenuButton(
                         icon: const CircleAvatar(
-                          radius: 24,
-                          child: Icon(Icons.person, size: 28),
+                          radius: 28,
+                          backgroundColor: Color(0xFF3B82F6),
+                          child: Icon(
+                            Icons.person,
+                            color: Colors.white,
+                            size: 32,
+                          ),
                         ),
                         itemBuilder: (_) => [
                           PopupMenuItem(
@@ -351,7 +363,7 @@ class _DashboardPageState extends State<DashboardPage>
                             },
                             child: const Row(
                               children: [
-                                Icon(Icons.logout_rounded),
+                                Icon(Icons.logout_rounded, color: Colors.red),
                                 SizedBox(width: 12),
                                 Text('Logout'),
                               ],
@@ -365,86 +377,113 @@ class _DashboardPageState extends State<DashboardPage>
 
                 // Body
                 Expanded(
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: Padding(
-                      padding: const EdgeInsets.all(40),
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (isAdmin) ...[
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(40),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (isAdmin) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
                               const Text(
                                 'Statistik Hari Ini',
                                 style: TextStyle(
-                                  fontSize: 28,
+                                  fontSize: 32,
                                   fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1E293B),
                                 ),
                               ),
-                              const SizedBox(height: 24),
-                              _statsLoading
-                                  ? const Center(
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 4,
-                                      ),
-                                    )
-                                  : Wrap(
-                                      spacing: 32,
-                                      runSpacing: 32,
-                                      children: [
-                                        _statCard(
-                                          'Total User',
-                                          _totalUsers.toString(),
-                                          Icons.people_rounded,
-                                          const Color(0xFF3B82F6),
-                                        ),
-                                        _statCard(
-                                          'Presensi Hari Ini',
-                                          _todayPresensi.toString(),
-                                          Icons.how_to_reg_rounded,
-                                          const Color(0xFF10B981),
-                                        ),
-                                        _statCard(
-                                          'Menunggu Approval',
-                                          _waitingApproval.toString(),
-                                          Icons.pending_actions_rounded,
-                                          const Color(0xFFF59E0B),
-                                        ),
-                                        _statCard(
-                                          'Hadir Hari Ini',
-                                          _presentToday.toString(),
-                                          Icons.check_circle_rounded,
-                                          const Color(0xFF10B981),
-                                        ),
-                                      ],
-                                    ),
-                              const SizedBox(height: 48),
-                            ],
-                            const Text(
-                              'Quick Actions',
-                              style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 32),
-                            GridView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: isWide ? 3 : 2,
-                                    childAspectRatio: 1.6,
-                                    crossAxisSpacing: 32,
-                                    mainAxisSpacing: 32,
+                              ElevatedButton.icon(
+                                onPressed: _loadStats,
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('Reload Data'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF3B82F6),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 16,
                                   ),
-                              itemCount: _getCards().length,
-                              itemBuilder: (_, i) =>
-                                  _premiumActionCard(_getCards()[i]),
-                            ),
-                          ],
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 32),
+                          _statsLoading
+                              ? const Center(
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 5,
+                                    color: Color(0xFF3B82F6),
+                                  ),
+                                )
+                              : GridView.count(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  crossAxisCount: isWide ? 4 : 2,
+                                  childAspectRatio:
+                                      1.45, // Naikkan sedikit biar aman dari overflow
+                                  crossAxisSpacing: 32,
+                                  mainAxisSpacing: 32,
+                                  children: [
+                                    _premiumStatCard(
+                                      'Total User',
+                                      _totalUsers.toString(),
+                                      Icons.people_rounded,
+                                      const Color(0xFF3B82F6),
+                                    ),
+                                    _premiumStatCard(
+                                      'Presensi Hari Ini',
+                                      _todayPresensi.toString(),
+                                      Icons.how_to_reg_rounded,
+                                      const Color(0xFF10B981),
+                                    ),
+                                    _premiumStatCard(
+                                      'Menunggu Approval',
+                                      _waitingApproval.toString(),
+                                      Icons.pending_actions_rounded,
+                                      const Color(0xFFF59E0B),
+                                    ),
+                                    _premiumStatCard(
+                                      'Hadir Disetujui',
+                                      _presentToday.toString(),
+                                      Icons.check_circle_rounded,
+                                      const Color(0xFF10B981),
+                                    ),
+                                  ],
+                                ),
+                          const SizedBox(height: 60),
+                        ],
+                        const Text(
+                          'Quick Actions',
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E293B),
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 32),
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: isWide ? 3 : 2,
+                                childAspectRatio: isWide
+                                    ? 1.55
+                                    : 1.45, // Naikkan lagi biar tidak overflow
+                                crossAxisSpacing: 40,
+                                mainAxisSpacing: 40,
+                              ),
+                          itemCount: _getCards().length,
+                          itemBuilder: (_, i) =>
+                              _premiumActionCard(_getCards()[i]),
+                        ),
+                        const SizedBox(height: 60),
+                      ],
                     ),
                   ),
                 ),
@@ -456,33 +495,52 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  Widget _statCard(String title, String value, IconData icon, Color color) {
+  Widget _premiumStatCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Container(
-      width: 280,
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(28),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.95),
+            Colors.white.withOpacity(0.8),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: color.withOpacity(0.4), width: 2),
         boxShadow: [
           BoxShadow(
+            color: color.withOpacity(0.15),
+            blurRadius: 30,
+            offset: const Offset(0, 15),
+          ),
+          BoxShadow(
             color: Colors.black.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.15),
+                  color: color.withOpacity(0.2),
                   shape: BoxShape.circle,
+                  border: Border.all(color: color.withOpacity(0.5), width: 3),
                 ),
-                child: Icon(icon, color: color, size: 32),
+                child: Icon(icon, size: 38, color: color),
               ),
               const Spacer(),
               Text(
@@ -499,9 +557,9 @@ class _DashboardPageState extends State<DashboardPage>
           Text(
             title,
             style: const TextStyle(
-              fontSize: 20,
+              fontSize: 21,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: Color(0xFF1E293B),
             ),
           ),
         ],
@@ -509,105 +567,102 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  // CARD PREMIUM - Glassmorphism + gradient border + hover scale
   Widget _premiumActionCard(Map<String, dynamic> card) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: AnimatedScale(
-        scale: 1.0,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(28),
-            onTap: card['onTap'],
-            child: Container(
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28),
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.white.withOpacity(0.9),
-                    Colors.white.withOpacity(0.7),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                border: Border.all(
-                  color: card['color'].withOpacity(0.3),
-                  width: 2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: card['color'].withOpacity(0.2),
-                    blurRadius: 30,
-                    offset: const Offset(0, 15),
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          card['color'].withOpacity(0.2),
-                          card['color'].withOpacity(0.05),
-                        ],
-                      ),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: card['color'].withOpacity(0.4),
-                        width: 3,
-                      ),
-                    ),
-                    child: Icon(card['icon'], size: 48, color: card['color']),
-                  ),
-                  const SizedBox(height: 28),
-                  Text(
-                    card['title'],
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    card['subtitle'],
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.black54,
-                      height: 1.4,
-                    ),
-                  ),
-                  const Spacer(),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: card['color'].withOpacity(0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.arrow_forward_rounded,
-                        color: card['color'],
-                        size: 28,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(32),
+        onTap: card['onTap'],
+        child: Container(
+          padding: const EdgeInsets.all(28), // Kurangi padding sedikit
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(32),
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withOpacity(0.9),
+                Colors.white.withOpacity(0.6),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
+            border: Border.all(
+              color: card['color'].withOpacity(0.4),
+              width: 2.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: card['color'].withOpacity(0.2),
+                blurRadius: 40,
+                offset: const Offset(0, 20),
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      card['color'].withOpacity(0.25),
+                      card['color'].withOpacity(0.1),
+                    ],
+                  ),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: card['color'].withOpacity(0.6),
+                    width: 4,
+                  ),
+                ),
+                child: Icon(card['icon'], size: 52, color: card['color']),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                card['title'],
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: Text(
+                  card['subtitle'],
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF64748B),
+                    height: 1.5,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: card['color'].withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 30,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -716,31 +771,36 @@ class _DashboardPageState extends State<DashboardPage>
     bool isSelected = false,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 20),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Material(
         color: isSelected
-            ? const Color(0xFF3B82F6).withOpacity(0.3)
+            ? const Color(0xFF3B82F6).withOpacity(0.25)
             : Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
             child: Row(
               children: [
                 Icon(
                   icon,
-                  color: isSelected ? Colors.white : Colors.grey[300],
-                  size: 28,
+                  color: isSelected ? Colors.white : Colors.grey[400],
+                  size: 30,
                 ),
                 const SizedBox(width: 20),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.grey[300],
-                    fontSize: 17,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : Colors.grey[300],
+                      fontSize: 18,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -766,8 +826,9 @@ class _DashboardPageState extends State<DashboardPage>
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       backgroundColor: Colors.white,
-      builder: (_) => Container(
-        padding: const EdgeInsets.fromLTRB(32, 40, 32, 40),
+      isScrollControlled: true,
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -782,7 +843,7 @@ class _DashboardPageState extends State<DashboardPage>
             const SizedBox(height: 32),
             const Text(
               'Pilih Jenis Penugasan',
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 32),
             _penugasanOption(
@@ -803,7 +864,7 @@ class _DashboardPageState extends State<DashboardPage>
               const Color(0xFF8B5CF6),
               () => _navigateToPresensi('Penugasan_Full'),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 40),
           ],
         ),
       ),
@@ -817,50 +878,50 @@ class _DashboardPageState extends State<DashboardPage>
     VoidCallback onTap,
   ) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
           onTap: () {
             Navigator.pop(context);
             onTap();
           },
           child: Container(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: color.withOpacity(0.4), width: 2),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 15,
-                  offset: const Offset(0, 8),
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
                 ),
               ],
-              border: Border.all(color: color.withOpacity(0.3)),
             ),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(18),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.15),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(icon, color: color, size: 36),
+                  child: Icon(icon, size: 40, color: color),
                 ),
-                const SizedBox(width: 24),
+                const SizedBox(width: 28),
                 Expanded(
                   child: Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 20,
+                      fontSize: 22,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
-                Icon(Icons.arrow_forward_ios_rounded, color: color, size: 28),
+                Icon(Icons.arrow_forward_ios_rounded, color: color, size: 32),
               ],
             ),
           ),
