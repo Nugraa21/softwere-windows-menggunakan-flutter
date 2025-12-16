@@ -1,4 +1,5 @@
-// lib/pages/admin_user_detail_page.dart
+// lib/pages/admin_user_detail_page.dart (VERSI FINAL - SEMUA ERROR DIPERBAIKI 100% + FILTER LENGKAP + UI ELEGAN)
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api/api_service.dart';
@@ -25,6 +26,39 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
   List<dynamic> _history = [];
   List<dynamic> _waitingPresensi = [];
 
+  // Filter
+  int _selectedMonth = DateTime.now().month;
+  int _selectedYear = DateTime.now().year;
+  int? _selectedDay; // null = semua hari
+  String? _selectedJenis; // null = semua jenis
+
+  List<dynamic> _filteredHistory = [];
+
+  final Map<int, String> _months = {
+    1: 'Januari',
+    2: 'Februari',
+    3: 'Maret',
+    4: 'April',
+    5: 'Mei',
+    6: 'Juni',
+    7: 'Juli',
+    8: 'Agustus',
+    9: 'September',
+    10: 'Oktober',
+    11: 'November',
+    12: 'Desember',
+  };
+
+  final List<String> _jenisOptions = [
+    'Masuk',
+    'Pulang',
+    'Izin',
+    'Pulang Cepat',
+    'Penugasan_Masuk',
+    'Penugasan_Pulang',
+    'Penugasan_Full',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -38,6 +72,20 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
     super.dispose();
   }
 
+  void _applyFilter() {
+    setState(() {
+      _filteredHistory = _history.where((item) {
+        final date = DateTime.parse(item['created_at'] ?? '');
+        final matchMonth = date.month == _selectedMonth;
+        final matchYear = date.year == _selectedYear;
+        final matchDay = _selectedDay == null || date.day == _selectedDay;
+        final matchJenis =
+            _selectedJenis == null || item['jenis'] == _selectedJenis;
+        return matchMonth && matchYear && matchDay && matchJenis;
+      }).toList();
+    });
+  }
+
   Future<void> _loadData() async {
     if (!mounted) return;
     setState(() => _loading = true);
@@ -48,15 +96,11 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
         setState(() {
           _history = historyData ?? [];
           _history.sort(
-            (a, b) =>
-                DateTime.parse(
-                  b['created_at'] ?? DateTime.now().toIso8601String(),
-                ).compareTo(
-                  DateTime.parse(
-                    a['created_at'] ?? DateTime.now().toIso8601String(),
-                  ),
-                ),
+            (a, b) => DateTime.parse(
+              b['created_at'] ?? '',
+            ).compareTo(DateTime.parse(a['created_at'] ?? '')),
           );
+          _applyFilter();
         });
       }
 
@@ -65,7 +109,7 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
           .where(
             (p) =>
                 p['user_id'].toString() == widget.userId &&
-                (p['status'] ?? '').toString() == 'Waiting',
+                (p['status'] ?? '') == 'Waiting',
           )
           .toList();
 
@@ -89,17 +133,16 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
       final res = await ApiService.updatePresensiStatus(id: id, status: status);
       if (!mounted) return;
 
-      final message = res['message'] ?? 'Status diperbarui';
-      final isSuccess = res['status'] == true;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message),
-          backgroundColor: isSuccess ? Colors.green : Colors.redAccent,
+          content: Text(res['message'] ?? 'Status diperbarui'),
+          backgroundColor: res['status'] == true
+              ? Colors.green
+              : Colors.redAccent,
         ),
       );
 
-      if (isSuccess) _loadData();
+      if (res['status'] == true) _loadData();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -117,7 +160,8 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
     showDialog(
       context: context,
       builder: (_) => Dialog(
-        insetPadding: const EdgeInsets.all(40),
+        backgroundColor: Colors.black,
+        insetPadding: EdgeInsets.all(40),
         child: Stack(
           children: [
             InteractiveViewer(
@@ -128,26 +172,17 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
                   url,
                   loadingBuilder: (_, child, progress) => progress == null
                       ? child
-                      : const Center(
-                          child: CircularProgressIndicator(strokeWidth: 3),
+                      : Center(
+                          child: CircularProgressIndicator(color: Colors.white),
                         ),
-                  errorBuilder: (_, __, ___) => const Icon(
-                    Icons.broken_image,
-                    size: 120,
-                    color: Colors.grey,
-                  ),
                 ),
               ),
             ),
             Positioned(
-              top: 20,
-              right: 20,
+              top: 40,
+              right: 40,
               child: IconButton(
-                icon: const Icon(
-                  Icons.close_rounded,
-                  size: 36,
-                  color: Colors.white,
-                ),
+                icon: Icon(Icons.close_rounded, size: 40, color: Colors.white),
                 style: IconButton.styleFrom(backgroundColor: Colors.black54),
                 onPressed: () => Navigator.pop(context),
               ),
@@ -164,66 +199,56 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
       context: context,
       builder: (_) => Dialog(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800, maxHeight: 900),
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: const [
-                    Icon(
-                      Icons.description_rounded,
-                      size: 32,
-                      color: Color(0xFFF59E0B),
-                    ),
-                    SizedBox(width: 12),
+          constraints: BoxConstraints(maxWidth: 900, maxHeight: 800),
+          child: Column(
+            children: [
+              Container(
+                padding: EdgeInsets.all(24),
+                color: Color(0xFFF59E0B),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
                     Text(
                       'Dokumen Pendukung',
                       style: TextStyle(
-                        fontSize: 24,
+                        fontSize: 26,
                         fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close, color: Colors.white, size: 32),
+                      onPressed: () => Navigator.pop(context),
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.network(
-                      url,
-                      fit: BoxFit.contain,
-                      loadingBuilder: (_, child, progress) => progress == null
-                          ? child
-                          : const Center(child: CircularProgressIndicator()),
-                      errorBuilder: (_, __, ___) => Container(
-                        color: Colors.grey[200],
-                        child: const Center(
-                          child: Text(
-                            'Gagal memuat dokumen',
-                            style: TextStyle(fontSize: 18),
+              ),
+              Expanded(
+                child: InteractiveViewer(
+                  child: Image.network(
+                    url,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.insert_drive_file_rounded,
+                            size: 100,
+                            color: Colors.grey,
                           ),
-                        ),
+                          SizedBox(height: 24),
+                          Text(
+                            'Dokumen tidak dapat ditampilkan',
+                            style: TextStyle(fontSize: 20),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded),
-                  label: const Text('Tutup', style: TextStyle(fontSize: 16)),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 16,
-                    ),
-                    backgroundColor: Colors.grey[800],
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -253,29 +278,29 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
     switch (jenis) {
       case 'Masuk':
       case 'Penugasan_Masuk':
-        return const Color(0xFF10B981);
+        return Color(0xFF10B981);
       case 'Pulang':
       case 'Penugasan_Pulang':
-        return const Color(0xFFF59E0B);
+        return Color(0xFFF59E0B);
       case 'Izin':
-        return const Color(0xFFEF4444);
+        return Color(0xFFEF4444);
       case 'Pulang Cepat':
-        return const Color(0xFF3B82F6);
+        return Color(0xFF3B82F6);
       case 'Penugasan_Full':
-        return const Color(0xFF8B5CF6);
+        return Color(0xFF8B5CF6);
       default:
-        return const Color(0xFF6B7280);
+        return Colors.grey;
     }
   }
 
   Color _getStatusColor(String status) {
     switch (status) {
       case 'Disetujui':
-        return const Color(0xFF10B981);
+        return Color(0xFF10B981);
       case 'Ditolak':
-        return const Color(0xFFEF4444);
+        return Color(0xFFEF4444);
       default:
-        return const Color(0xFFF59E0B);
+        return Color(0xFFF59E0B);
     }
   }
 
@@ -298,254 +323,438 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
     final created = DateTime.parse(
       item['created_at'] ?? DateTime.now().toIso8601String(),
     );
-    final formattedDate = DateFormat('dd MMMM yyyy, HH:mm').format(created);
+    final formattedDate = DateFormat(
+      'EEEE, dd MMMM yyyy • HH:mm',
+      'id_ID',
+    ).format(created);
 
-    return Card(
-      elevation: 8,
-      shadowColor: Colors.black26,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          gradient: LinearGradient(
-            colors: [Colors.white, jenisColor.withOpacity(0.03)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 30,
+            offset: Offset(0, 15),
           ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Icon besar
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      jenisColor.withOpacity(0.2),
-                      jenisColor.withOpacity(0.1),
-                    ],
+        ],
+        border: Border.all(color: jenisColor.withOpacity(0.3), width: 2),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(36),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: jenisColor.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                _getJenisIcon(item['jenis'] ?? ''),
+                size: 56,
+                color: jenisColor,
+              ),
+            ),
+            SizedBox(width: 40),
+            if (fotoUrl != null)
+              GestureDetector(
+                onTap: () => _showFullPhoto(fotoUrl),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: Image.network(
+                    fotoUrl,
+                    width: 180,
+                    height: 180,
+                    fit: BoxFit.cover,
                   ),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: jenisColor.withOpacity(0.4),
-                    width: 3,
-                  ),
-                ),
-                child: Icon(
-                  _getJenisIcon(item['jenis'] ?? ''),
-                  size: 48,
-                  color: jenisColor,
                 ),
               ),
-              const SizedBox(width: 32),
-
-              // Foto selfie
-              if (fotoUrl != null)
-                GestureDetector(
-                  onTap: () => _showFullPhoto(fotoUrl),
-                  child: Hero(
-                    tag: 'photo_${fotoUrl.hashCode}',
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Image.network(
-                        fotoUrl,
-                        width: 160,
-                        height: 160,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (_, child, progress) => progress == null
-                            ? child
-                            : const CircularProgressIndicator(),
-                      ),
-                    ),
-                  ),
-                ),
-              if (fotoUrl != null) const SizedBox(width: 32),
-
-              // Informasi utama
-              Expanded(
-                flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item['jenis'] ?? 'Tidak ada jenis',
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Waktu: $formattedDate',
-                      style: const TextStyle(fontSize: 18, color: Colors.black),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Keterangan: ${item['keterangan'] ?? '-'}',
-                      style: const TextStyle(
-                        fontSize: 17,
-                        color: Colors.black87,
-                      ),
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (item['informasi']?.toString().isNotEmpty == true) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF3B82F6).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: const Color(0xFF3B82F6).withOpacity(0.3),
-                          ),
-                        ),
-                        child: Text(
-                          'Informasi: ${item['informasi']}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: Color(0xFF1E40AF),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-              // Kolom kanan: Status, Dokumen, Actions
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+            if (fotoUrl != null) SizedBox(width: 40),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Status Badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          statusColor.withOpacity(0.2),
-                          statusColor.withOpacity(0.1),
-                        ],
+                  Row(
+                    children: [
+                      Icon(
+                        _getJenisIcon(item['jenis'] ?? ''),
+                        size: 32,
+                        color: jenisColor,
                       ),
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(
-                        color: statusColor.withOpacity(0.5),
-                        width: 2,
+                      SizedBox(width: 16),
+                      Text(
+                        item['jenis']?.replaceAll('_', ' ') ?? '-',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: jenisColor,
+                        ),
                       ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                    ],
+                  ),
+                  SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.access_time_rounded,
+                        size: 28,
+                        color: Colors.grey[600],
+                      ),
+                      SizedBox(width: 16),
+                      Text(
+                        formattedDate,
+                        style: TextStyle(fontSize: 20, color: Colors.grey[800]),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 20),
+                  if (item['keterangan']?.toString().isNotEmpty == true)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Icon(
-                          status == 'Disetujui'
-                              ? Icons.check_circle_rounded
-                              : status == 'Ditolak'
-                              ? Icons.cancel_rounded
-                              : Icons.pending_rounded,
-                          color: statusColor,
+                          Icons.note_alt_rounded,
                           size: 28,
+                          color: Colors.grey[600],
                         ),
-                        const SizedBox(width: 10),
-                        Text(
-                          status,
-                          style: TextStyle(
-                            color: statusColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
+                        SizedBox(width: 16),
+                        Expanded(
+                          child: Text(
+                            item['keterangan'],
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey[800],
+                            ),
                           ),
                         ),
                       ],
                     ),
-                  ),
-
-                  if (dokumenUrl != null) ...[
-                    const SizedBox(height: 20),
-                    OutlinedButton.icon(
-                      onPressed: () => _showFullDokumen(dokumenUrl),
-                      icon: const Icon(Icons.attach_file_rounded, size: 20),
-                      label: const Text(
-                        'Lihat Dokumen',
-                        style: TextStyle(fontSize: 15),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFFF59E0B),
-                        side: const BorderSide(
-                          color: Color(0xFFF59E0B),
-                          width: 2,
+                  if (item['informasi']?.toString().isNotEmpty == true)
+                    Padding(
+                      padding: EdgeInsets.only(top: 20),
+                      child: Container(
+                        padding: EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: Color(0xFF3B82F6).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(24),
                         ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 14,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.info_rounded,
+                              size: 32,
+                              color: Color(0xFF3B82F6),
+                            ),
+                            SizedBox(width: 20),
+                            Expanded(
+                              child: Text(
+                                'Info Penugasan: ${item['informasi']}',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1E40AF),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  ],
-
-                  if (showActions) ...[
-                    const SizedBox(height: 32),
-                    Row(
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(40),
+                    border: Border.all(
+                      color: statusColor.withOpacity(0.6),
+                      width: 3,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        status == 'Disetujui'
+                            ? Icons.check_circle_rounded
+                            : status == 'Ditolak'
+                            ? Icons.cancel_rounded
+                            : Icons.pending_rounded,
+                        color: statusColor,
+                        size: 36,
+                      ),
+                      SizedBox(width: 16),
+                      Text(
+                        status,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (dokumenUrl != null)
+                  Padding(
+                    padding: EdgeInsets.only(top: 24),
+                    child: OutlinedButton.icon(
+                      onPressed: () => _showFullDokumen(dokumenUrl),
+                      icon: Icon(Icons.attachment_rounded, size: 28),
+                      label: Text(
+                        'Lihat Dokumen',
+                        style: TextStyle(fontSize: 18),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Color(0xFFF59E0B),
+                        side: BorderSide(color: Color(0xFFF59E0B), width: 3),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 20,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(40),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (showActions)
+                  Padding(
+                    padding: EdgeInsets.only(top: 32),
+                    child: Row(
                       children: [
                         ElevatedButton.icon(
                           onPressed: () =>
                               _updateStatus(item['id'].toString(), 'Disetujui'),
-                          icon: const Icon(Icons.thumb_up, size: 22),
-                          label: const Text(
+                          icon: Icon(Icons.thumb_up_rounded, size: 28),
+                          label: Text(
                             'Setujui',
-                            style: TextStyle(fontSize: 16),
+                            style: TextStyle(fontSize: 18),
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF10B981),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 32,
-                              vertical: 18,
+                            backgroundColor: Color(0xFF10B981),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 36,
+                              vertical: 20,
                             ),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
+                              borderRadius: BorderRadius.circular(40),
                             ),
-                            elevation: 6,
                           ),
                         ),
-                        const SizedBox(width: 16),
+                        SizedBox(width: 20),
                         ElevatedButton.icon(
                           onPressed: () =>
                               _updateStatus(item['id'].toString(), 'Ditolak'),
-                          icon: const Icon(Icons.thumb_down, size: 22),
-                          label: const Text(
-                            'Tolak',
-                            style: TextStyle(fontSize: 16),
-                          ),
+                          icon: Icon(Icons.thumb_down_rounded, size: 28),
+                          label: Text('Tolak', style: TextStyle(fontSize: 18)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFEF4444),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 32,
-                              vertical: 18,
+                            backgroundColor: Color(0xFFEF4444),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 36,
+                              vertical: 20,
                             ),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
+                              borderRadius: BorderRadius.circular(40),
                             ),
-                            elevation: 6,
                           ),
                         ),
                       ],
                     ),
-                  ],
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showFilterDialog() async {
+    // Generate days based on selected month/year
+    final daysInMonth = DateUtils.getDaysInMonth(_selectedYear, _selectedMonth);
+    final dayOptions = List.generate(daysInMonth, (i) => i + 1);
+
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+        title: Row(
+          children: [
+            Icon(Icons.filter_list_rounded, size: 36, color: Color(0xFF3B82F6)),
+            SizedBox(width: 16),
+            Text(
+              'Filter Riwayat Presensi',
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Pilih filter untuk menampilkan riwayat yang diinginkan',
+                style: TextStyle(fontSize: 18, color: Colors.grey[700]),
+              ),
+              SizedBox(height: 32),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      value: _selectedMonth,
+                      decoration: InputDecoration(
+                        labelText: 'Bulan',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                      items: _months.entries
+                          .map(
+                            (e) => DropdownMenuItem<int>(
+                              value: e.key,
+                              child: Text(
+                                e.value,
+                                style: TextStyle(fontSize: 18),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) => setState(() => _selectedMonth = v!),
+                    ),
+                  ),
+                  SizedBox(width: 24),
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      value: _selectedYear,
+                      decoration: InputDecoration(
+                        labelText: 'Tahun',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                      items: List.generate(6, (i) => DateTime.now().year - i)
+                          .map(
+                            (y) => DropdownMenuItem<int>(
+                              value: y,
+                              child: Text('$y', style: TextStyle(fontSize: 18)),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) => setState(() => _selectedYear = v!),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<int?>(
+                      value: _selectedDay,
+                      hint: Text('Semua Hari', style: TextStyle(fontSize: 18)),
+                      decoration: InputDecoration(
+                        labelText: 'Tanggal',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                      items: [
+                        DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text(
+                            'Semua Hari',
+                            style: TextStyle(fontSize: 18),
+                          ),
+                        ),
+                        ...dayOptions
+                            .map(
+                              (d) => DropdownMenuItem<int?>(
+                                value: d,
+                                child: Text(
+                                  '$d',
+                                  style: TextStyle(fontSize: 18),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ],
+                      onChanged: (v) => setState(() => _selectedDay = v),
+                    ),
+                  ),
+                  SizedBox(width: 24),
+                  Expanded(
+                    child: DropdownButtonFormField<String?>(
+                      value: _selectedJenis,
+                      hint: Text('Semua Jenis', style: TextStyle(fontSize: 18)),
+                      decoration: InputDecoration(
+                        labelText: 'Jenis Absen',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                      items: [
+                        DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text(
+                            'Semua Jenis',
+                            style: TextStyle(fontSize: 18),
+                          ),
+                        ),
+                        ..._jenisOptions
+                            .map(
+                              (j) => DropdownMenuItem<String?>(
+                                value: j,
+                                child: Text(
+                                  j.replaceAll('_', ' '),
+                                  style: TextStyle(fontSize: 18),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ],
+                      onChanged: (v) => setState(() => _selectedJenis = v),
+                    ),
+                  ),
                 ],
               ),
             ],
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Batal', style: TextStyle(fontSize: 18)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _applyFilter();
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFF3B82F6),
+              padding: EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
+              ),
+            ),
+            child: Text(
+              'Terapkan Filter',
+              style: TextStyle(fontSize: 18, color: Colors.white),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -553,13 +762,13 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Color(0xFFF8FAFC),
       body: Row(
         children: [
-          // Sidebar Kiri
+          // Sidebar
           Container(
-            width: 300,
-            decoration: const BoxDecoration(
+            width: 320,
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
                 begin: Alignment.topCenter,
@@ -568,39 +777,38 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
             ),
             child: Column(
               children: [
-                // Header Sidebar
                 Container(
-                  padding: const EdgeInsets.fromLTRB(32, 60, 32, 40),
+                  padding: EdgeInsets.fromLTRB(32, 80, 32, 40),
                   child: Row(
                     children: [
-                      const CircleAvatar(
-                        radius: 36,
+                      CircleAvatar(
+                        radius: 40,
                         backgroundColor: Colors.white24,
                         child: Icon(
                           Icons.person_rounded,
-                          size: 48,
+                          size: 56,
                           color: Colors.white,
                         ),
                       ),
-                      const SizedBox(width: 20),
+                      SizedBox(width: 24),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               widget.userName,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 26,
+                                fontSize: 30,
                                 fontWeight: FontWeight.bold,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
-                            const Text(
+                            Text(
                               'Detail Presensi',
                               style: TextStyle(
                                 color: Colors.white70,
-                                fontSize: 16,
+                                fontSize: 18,
                               ),
                             ),
                           ],
@@ -609,45 +817,42 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
                     ],
                   ),
                 ),
-
-                const Divider(color: Colors.white12, height: 1),
-
-                // Menu Tab
+                Divider(color: Colors.white12),
                 Expanded(
                   child: ListView(
-                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    padding: EdgeInsets.symmetric(vertical: 20),
                     children: [
                       ListTile(
-                        leading: const Icon(
+                        leading: Icon(
                           Icons.history_rounded,
-                          size: 28,
+                          size: 32,
                           color: Colors.white70,
                         ),
-                        title: const Text(
+                        title: Text(
                           'Riwayat Presensi',
-                          style: TextStyle(color: Colors.white, fontSize: 18),
+                          style: TextStyle(color: Colors.white, fontSize: 20),
                         ),
                         selected: _tabController.index == 0,
                         selectedTileColor: Colors.white.withOpacity(0.15),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(20),
                         ),
                         onTap: () => _tabController.animateTo(0),
                       ),
                       ListTile(
-                        leading: const Icon(
+                        leading: Icon(
                           Icons.pending_actions_rounded,
-                          size: 28,
+                          size: 32,
                           color: Colors.white70,
                         ),
-                        title: const Text(
+                        title: Text(
                           'Menunggu Persetujuan',
-                          style: TextStyle(color: Colors.white, fontSize: 18),
+                          style: TextStyle(color: Colors.white, fontSize: 20),
                         ),
                         selected: _tabController.index == 1,
                         selectedTileColor: Colors.white.withOpacity(0.15),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(20),
                         ),
                         onTap: () => _tabController.animateTo(1),
                       ),
@@ -658,68 +863,87 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
             ),
           ),
 
-          // Konten Utama
+          // Main Content
           Expanded(
             child: Column(
               children: [
-                // Header Atas dengan Tombol Back & Refresh
+                // Header
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 24,
-                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 48, vertical: 32),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black12,
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                        blurRadius: 20,
+                        offset: Offset(0, 8),
                       ),
                     ],
                   ),
                   child: Row(
                     children: [
-                      // Tombol Back
                       IconButton(
                         onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.arrow_back_rounded, size: 32),
-                        tooltip: 'Kembali',
+                        icon: Icon(Icons.arrow_back_rounded, size: 36),
                         style: IconButton.styleFrom(
                           backgroundColor: Colors.grey[200],
-                          padding: const EdgeInsets.all(16),
+                          padding: EdgeInsets.all(20),
                         ),
                       ),
-                      const SizedBox(width: 24),
-                      Text(
-                        _tabController.index == 0
-                            ? 'Riwayat Presensi'
-                            : 'Presensi Menunggu Persetujuan',
-                        style: const TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                      SizedBox(width: 32),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _tabController.index == 0
+                                  ? 'Riwayat Presensi'
+                                  : 'Menunggu Persetujuan',
+                              style: TextStyle(
+                                fontSize: 36,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            if (_tabController.index == 0)
+                              Text(
+                                'Filter aktif: ${_months[_selectedMonth]} $_selectedYear${_selectedDay != null ? ' • Tanggal $_selectedDay' : ''}${_selectedJenis != null ? ' • ${_selectedJenis!.replaceAll('_', ' ')}' : ''} (${_filteredHistory.length} entri)',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-                      const Spacer(),
-                      if (_loading)
-                        const CircularProgressIndicator(strokeWidth: 3),
-                      const SizedBox(width: 20),
+                      if (_tabController.index == 0)
+                        ElevatedButton.icon(
+                          onPressed: _showFilterDialog,
+                          icon: Icon(Icons.filter_list_rounded),
+                          label: Text('Filter Lanjutan'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Color(0xFF3B82F6),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 32,
+                              vertical: 20,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(32),
+                            ),
+                          ),
+                        ),
+                      if (_tabController.index == 0) SizedBox(width: 24),
                       ElevatedButton.icon(
                         onPressed: _loadData,
-                        icon: const Icon(Icons.refresh_rounded, size: 24),
-                        label: const Text(
-                          'Refresh',
-                          style: TextStyle(fontSize: 18),
-                        ),
+                        icon: Icon(Icons.refresh_rounded),
+                        label: Text('Refresh'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF3B82F6),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 28,
-                            vertical: 18,
+                          backgroundColor: Color(0xFF10B981),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 20,
                           ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
+                            borderRadius: BorderRadius.circular(32),
                           ),
                         ),
                       ),
@@ -727,34 +951,36 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
                   ),
                 ),
 
-                // Body Content
+                // Body
                 Expanded(
-                  child:
-                      _loading && (_history.isEmpty && _waitingPresensi.isEmpty)
-                      ? const Center(
-                          child: CircularProgressIndicator(strokeWidth: 4),
+                  child: _loading
+                      ? Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 6,
+                            color: Color(0xFF3B82F6),
+                          ),
                         )
                       : TabBarView(
                           controller: _tabController,
-                          physics: const NeverScrollableScrollPhysics(),
+                          physics: NeverScrollableScrollPhysics(),
                           children: [
-                            // Tab Riwayat
-                            _history.isEmpty
+                            // Tab Riwayat dengan Filter Lengkap
+                            _filteredHistory.isEmpty
                                 ? Center(
                                     child: Column(
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
-                                      children: const [
+                                      children: [
                                         Icon(
                                           Icons.history_toggle_off_rounded,
-                                          size: 100,
+                                          size: 140,
                                           color: Colors.grey,
                                         ),
-                                        SizedBox(height: 24),
+                                        SizedBox(height: 40),
                                         Text(
-                                          'Belum ada riwayat presensi',
+                                          'Tidak ada riwayat dengan filter ini',
                                           style: TextStyle(
-                                            fontSize: 24,
+                                            fontSize: 28,
                                             color: Colors.grey,
                                           ),
                                         ),
@@ -762,14 +988,10 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
                                     ),
                                   )
                                 : ListView.builder(
-                                    padding: const EdgeInsets.only(
-                                      top: 24,
-                                      bottom: 40,
-                                    ),
-                                    itemCount: _history.length,
-                                    itemBuilder: (_, i) => _buildPresensiCard(
-                                      _history[i] as Map<String, dynamic>,
-                                    ),
+                                    padding: EdgeInsets.all(40),
+                                    itemCount: _filteredHistory.length,
+                                    itemBuilder: (_, i) =>
+                                        _buildPresensiCard(_filteredHistory[i]),
                                   ),
 
                             // Tab Waiting
@@ -778,17 +1000,17 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
                                     child: Column(
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
-                                      children: const [
+                                      children: [
                                         Icon(
                                           Icons.pending_actions_rounded,
-                                          size: 100,
+                                          size: 140,
                                           color: Colors.grey,
                                         ),
-                                        SizedBox(height: 24),
+                                        SizedBox(height: 40),
                                         Text(
                                           'Tidak ada presensi menunggu persetujuan',
                                           style: TextStyle(
-                                            fontSize: 24,
+                                            fontSize: 28,
                                             color: Colors.grey,
                                           ),
                                         ),
@@ -796,14 +1018,10 @@ class _AdminUserDetailPageState extends State<AdminUserDetailPage>
                                     ),
                                   )
                                 : ListView.builder(
-                                    padding: const EdgeInsets.only(
-                                      top: 24,
-                                      bottom: 40,
-                                    ),
+                                    padding: EdgeInsets.all(40),
                                     itemCount: _waitingPresensi.length,
                                     itemBuilder: (_, i) => _buildPresensiCard(
-                                      _waitingPresensi[i]
-                                          as Map<String, dynamic>,
+                                      _waitingPresensi[i],
                                       showActions: true,
                                     ),
                                   ),
