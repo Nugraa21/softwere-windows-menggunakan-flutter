@@ -30,7 +30,7 @@ penugasan pulang / masuk jam nya tidak perlu soalnya jam nya ada di dalam inform
 | 3  | q    | 013 | izin           |                   |             |              |              | sakit / dari inputan form          |
 | 4  | e    | 142 | penugasan      | 08:00             | masuk       | 03:00        | pulang       | di terima / di tolak               |
 | 5  | h    | 122 | penugasan full |                   |             |              |              | di terima / di tolak               |
-| 6  | v    | 178 | pulang cepat   | 08:00             | masuk       | 09:00        | pulang cepat | di terima / di tolak               |
+<!-- | 6  | v    | 178 | pulang cepat   | 08:00             | masuk       | 09:00        | pulang cepat | di terima / di tolak               | -->
 
 ## Aturan Sistem Absensi
 - **Penutupan absen masuk**: Maksimal telat jam 09:00.
@@ -39,10 +39,11 @@ penugasan pulang / masuk jam nya tidak perlu soalnya jam nya ada di dalam inform
 - **Izin**: Ditangani secara khusus berdasarkan inputan form (misalnya, sakit).
 - **Penugasan**: Jam pulang/masuk tidak perlu diisi karena jamnya ada di dalam informasi surat tugasnya. Khusus penugasan full, tidak ada kolom jam yang diisi.
 - Untuk logi jadi bisa pakai username/ nip nik 
+- menambahkan untuk menghapus absensi 
 
 ## Catatan 
 - untun absen masuk dan pulang biasa itu ada hal beru jadi kalau lupa melakukan absen sala satunya contoh lupa masuk / pulang bakal kena sangsi (3 jam tidak masuk)
-
+-  rekap untuk bagian harian tambahkan rentan waktu mau pilih dari waktu wal sampai akhir 
 
 
 
