@@ -228,6 +228,19 @@ class ApiService {
     };
   }
 
+  // ================== RESET DEVICE ID ==================
+  static Future<Map<String, dynamic>> resetDeviceId(String userId) async {
+    final headers = await _getHeaders();
+    final result = await _safeRequest(
+      () => http.post(
+        Uri.parse("$baseUrl/update_user.php"),
+        headers: headers,
+        body: jsonEncode({"id": userId, "reset_device": true}),
+      ),
+    );
+    return result;
+  }
+
   // ================== REGISTER ==================
   static Future<Map<String, dynamic>> register({
     required String username,

@@ -1,5 +1,4 @@
-// lib/pages/user_management_page.dart (VERSI FINAL - ERROR DIPERBAIKI + CARD HANYA TAMPILKAN ROLE SAJA)
-
+// lib/pages/user_management_page.dart - DIPERBAIKI ERROR null safety di nipNisn
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../api/api_service.dart';
@@ -11,19 +10,29 @@ class UserManagementPage extends StatefulWidget {
   State<UserManagementPage> createState() => _UserManagementPageState();
 }
 
-class _UserManagementPageState extends State<UserManagementPage> {
+class _UserManagementPageState extends State<UserManagementPage>
+    with TickerProviderStateMixin {
   bool _loading = true;
   List<dynamic> _users = [];
   List<dynamic> _filteredUsers = [];
   final TextEditingController _searchC = TextEditingController();
   Timer? _debounce;
 
-  // Status yang diizinkan untuk dropdown edit (sesuai backend PHP)
-  final List<String> _allowedStatuses = ['Karyawan', 'Guru', 'Staff Lain'];
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
+    );
+    _fadeController.forward();
+
     _loadUsers();
     _searchC.addListener(_onSearchChanged);
   }
@@ -33,6 +42,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
     _debounce?.cancel();
     _searchC.removeListener(_onSearchChanged);
     _searchC.dispose();
+    _fadeController.dispose();
     super.dispose();
   }
 
@@ -45,22 +55,17 @@ class _UserManagementPageState extends State<UserManagementPage> {
     setState(() => _loading = true);
     try {
       final data = await ApiService.getUsers();
-      final filtered = data
-          .where(
-            (u) => [
-              'user',
-              'admin',
-              'superadmin',
-            ].contains(u['role']?.toString().toLowerCase()),
-          )
-          .toList();
+      final filtered = (data as List).where((u) {
+        final role = (u['role']?.toString().toLowerCase() ?? '');
+        return role == 'user' || role == 'admin' || role == 'superadmin';
+      }).toList();
 
       setState(() {
         _users = filtered;
-        _filteredUsers = List.from(filtered)
+        _filteredUsers = filtered
           ..sort(
             (a, b) => (a['nama_lengkap'] ?? '').toString().compareTo(
-              b['nama_lengkap'] ?? '',
+              (b['nama_lengkap'] ?? '').toString(),
             ),
           );
       });
@@ -69,7 +74,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal memuat user: $e'),
-            backgroundColor: Colors.redAccent,
+            backgroundColor: const Color(0xFFEF4444),
           ),
         );
       }
@@ -85,33 +90,466 @@ class _UserManagementPageState extends State<UserManagementPage> {
           query.isEmpty
                 ? List.from(_users)
                 : _users.where((u) {
-                    final nama = (u['nama_lengkap'] ?? u['nama'] ?? '')
+                    final nama = (u['nama_lengkap'] ?? '')
                         .toString()
                         .toLowerCase();
                     final username = (u['username'] ?? '')
                         .toString()
                         .toLowerCase();
                     final nip = (u['nip_nisn']?.toString() ?? '').toLowerCase();
-                    final status = (u['status'] ?? '').toString().toLowerCase();
                     return nama.contains(query) ||
                         username.contains(query) ||
-                        nip.contains(query) ||
-                        status.contains(query);
+                        nip.contains(query);
                   }).toList()
             ..sort(
               (a, b) => (a['nama_lengkap'] ?? '').toString().compareTo(
-                b['nama_lengkap'] ?? '',
+                (b['nama_lengkap'] ?? '').toString(),
               ),
             );
     });
   }
 
+  // ================== RESET DEVICE ID ==================
+  Future<void> _resetDevice(String userId, String nama) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.phonelink_erase_rounded, color: Colors.orange),
+            SizedBox(width: 12),
+            Text(
+              'Reset Device ID',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Text(
+          'Yakin reset device untuk "$nama"?\nUser harus login ulang di HP baru.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final res = await ApiService.resetDeviceId(userId);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res['message'] ?? 'Device ID berhasil direset'),
+          backgroundColor: const Color(0xFF10B981),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: const Color(0xFFEF4444),
+        ),
+      );
+    }
+  }
+
+  // ================== TAMBAH USER BARU ==================
+  Future<void> _addUser() async {
+    final usernameC = TextEditingController();
+    final namaC = TextEditingController();
+    final nipC = TextEditingController();
+    final passC = TextEditingController();
+    String selectedRole = 'user';
+    String selectedStatus = 'Karyawan';
+    bool isLoading = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateDialog) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: const Row(
+            children: [
+              Icon(
+                Icons.person_add_rounded,
+                color: Color(0xFF10B981),
+                size: 32,
+              ),
+              SizedBox(width: 16),
+              Text(
+                'Tambah User Baru',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 600,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: usernameC,
+                    decoration: InputDecoration(
+                      labelText: 'Username *',
+                      prefixIcon: const Icon(Icons.person_outline),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: namaC,
+                    decoration: InputDecoration(
+                      labelText: 'Nama Lengkap *',
+                      prefixIcon: const Icon(Icons.account_circle_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: nipC,
+                    decoration: InputDecoration(
+                      labelText: 'NIP/NISN (opsional)',
+                      prefixIcon: const Icon(Icons.badge_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: selectedRole,
+                    decoration: InputDecoration(
+                      labelText: 'Role',
+                      prefixIcon: const Icon(Icons.shield_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'user', child: Text('User')),
+                      DropdownMenuItem(value: 'admin', child: Text('Admin')),
+                      DropdownMenuItem(
+                        value: 'superadmin',
+                        child: Text('Super Admin'),
+                      ),
+                    ],
+                    onChanged: (val) =>
+                        setStateDialog(() => selectedRole = val!),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: selectedStatus,
+                    decoration: InputDecoration(
+                      labelText: 'Status',
+                      prefixIcon: const Icon(Icons.work_outline_rounded),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'Karyawan',
+                        child: Text('Karyawan'),
+                      ),
+                      DropdownMenuItem(value: 'Guru', child: Text('Guru')),
+                      DropdownMenuItem(
+                        value: 'Staff Lain',
+                        child: Text('Staff Lain'),
+                      ),
+                    ],
+                    onChanged: (val) =>
+                        setStateDialog(() => selectedStatus = val!),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: passC,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: 'Password *',
+                      prefixIcon: const Icon(Icons.lock_outline_rounded),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      if (usernameC.text.trim().isEmpty ||
+                          namaC.text.trim().isEmpty ||
+                          passC.text.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Field bertanda * wajib diisi'),
+                            backgroundColor: Color(0xFFEF4444),
+                          ),
+                        );
+                        return;
+                      }
+
+                      setStateDialog(() => isLoading = true);
+
+                      try {
+                        final res = await ApiService.register(
+                          username: usernameC.text.trim(),
+                          namaLengkap: namaC.text.trim(),
+                          password: passC.text,
+                          nipNisn: nipC.text.trim().isEmpty
+                              ? ''
+                              : nipC.text
+                                    .trim(), // DIPERBAIKI: kirim string kosong, bukan null
+                          role: selectedRole,
+                          status: selectedStatus,
+                        );
+
+                        if (res['status'] == true ||
+                            res['status'] == 'success') {
+                          Navigator.pop(ctx);
+                          _loadUsers();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('User berhasil ditambahkan'),
+                              backgroundColor: Color(0xFF10B981),
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                res['message'] ?? 'Gagal tambah user',
+                              ),
+                              backgroundColor: Color(0xFFEF4444),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error: $e'),
+                            backgroundColor: Color(0xFFEF4444),
+                          ),
+                        );
+                      } finally {
+                        if (mounted) setStateDialog(() => isLoading = false);
+                      }
+                    },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+              ),
+              child: isLoading
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text('Tambah User'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ================== EDIT USER ==================
+  Future<void> _editUser(Map<String, dynamic> user) async {
+    final usernameC = TextEditingController(text: user['username']);
+    final namaC = TextEditingController(text: user['nama_lengkap'] ?? '');
+    final nipC = TextEditingController(text: user['nip_nisn'] ?? '');
+    final passC = TextEditingController();
+    String? selectedRole = (user['role'] ?? 'user').toString().toLowerCase();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.edit_rounded, color: Color(0xFF3B82F6), size: 32),
+            SizedBox(width: 16),
+            Text(
+              'Edit User',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 600,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: usernameC,
+                  decoration: InputDecoration(
+                    labelText: 'Username',
+                    prefixIcon: const Icon(Icons.person),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey[50],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: namaC,
+                  decoration: InputDecoration(
+                    labelText: 'Nama Lengkap',
+                    prefixIcon: const Icon(Icons.account_circle),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey[50],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nipC,
+                  decoration: InputDecoration(
+                    labelText: 'NIP/NISN (opsional)',
+                    prefixIcon: const Icon(Icons.badge),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey[50],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedRole,
+                  decoration: InputDecoration(
+                    labelText: 'Role',
+                    prefixIcon: const Icon(Icons.shield),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey[50],
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'user', child: Text('User')),
+                    DropdownMenuItem(value: 'admin', child: Text('Admin')),
+                    DropdownMenuItem(
+                      value: 'superadmin',
+                      child: Text('Super Admin'),
+                    ),
+                  ],
+                  onChanged: (val) => selectedRole = val,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: passC,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Password Baru (kosongkan jika tidak ganti)',
+                    prefixIcon: const Icon(Icons.lock),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey[50],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              try {
+                final res = await ApiService.updateUser(
+                  id: user['id'].toString(),
+                  username: usernameC.text.trim(),
+                  namaLengkap: namaC.text.trim(),
+                  nipNisn: nipC.text.trim(),
+                  role: selectedRole,
+                  password: passC.text.isEmpty ? null : passC.text.trim(),
+                );
+
+                if (res['status'] == true || res['status'] == 'success') {
+                  Navigator.pop(ctx);
+                  _loadUsers();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('User berhasil diperbarui'),
+                      backgroundColor: Color(0xFF10B981),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(res['message'] ?? 'Gagal update'),
+                      backgroundColor: Color(0xFFEF4444),
+                    ),
+                  );
+                }
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error: $e'),
+                    backgroundColor: Color(0xFFEF4444),
+                  ),
+                );
+              }
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF3B82F6),
+            ),
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ================== HAPUS USER ==================
   Future<void> _deleteUser(String id, String role) async {
     if (role.toLowerCase() == 'superadmin') {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Tidak boleh menghapus Super Admin'),
-          backgroundColor: Colors.redAccent,
+          content: Text('Tidak boleh hapus superadmin'),
+          backgroundColor: Color(0xFFEF4444),
         ),
       );
       return;
@@ -120,36 +558,28 @@ class _UserManagementPageState extends State<UserManagementPage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        backgroundColor: Colors.white,
-        elevation: 20,
-        icon: Icon(Icons.warning_amber_rounded, size: 64, color: Colors.red),
-        title: Text(
-          'Hapus Akun?',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_forever_rounded, color: Color(0xFFEF4444)),
+            SizedBox(width: 12),
+            Text('Hapus User', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
         ),
-        content: Text(
-          'Akun ini akan dihapus secara permanen.',
-          style: TextStyle(fontSize: 18),
+        content: const Text(
+          'Yakin ingin menghapus user ini? Tidak bisa dibatalkan.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Batal', style: TextStyle(fontSize: 16)),
+            child: const Text('Batal'),
           ),
-          ElevatedButton(
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+            ),
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-              ),
-            ),
-            child: Text(
-              'Hapus',
-              style: TextStyle(fontSize: 16, color: Colors.white),
-            ),
+            child: const Text('Hapus'),
           ),
         ],
       ),
@@ -161,305 +591,29 @@ class _UserManagementPageState extends State<UserManagementPage> {
       final res = await ApiService.deleteUser(id);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(res['message'] ?? 'User berhasil dihapus'),
-          backgroundColor: Colors.green,
+          content: Text(res['message'] ?? 'User dihapus'),
+          backgroundColor: const Color(0xFF10B981),
         ),
       );
       _loadUsers();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: const Color(0xFFEF4444),
+        ),
       );
     }
-  }
-
-  Future<void> _editUser(Map<String, dynamic> user) async {
-    final usernameC = TextEditingController(text: user['username']);
-    final namaC = TextEditingController(text: user['nama_lengkap'] ?? '');
-    final nipC = TextEditingController(text: user['nip_nisn'] ?? '');
-    final passC = TextEditingController();
-
-    String selectedRole = (user['role'] ?? 'user').toString().toLowerCase();
-    String currentStatus = user['status']?.toString().trim() ?? 'Karyawan';
-    String selectedStatus = _allowedStatuses.contains(currentStatus)
-        ? currentStatus
-        : _allowedStatuses[0];
-
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-        backgroundColor: Colors.white,
-        elevation: 20,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: 600),
-          child: Padding(
-            padding: EdgeInsets.all(40),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.edit_rounded,
-                        size: 40,
-                        color: Color(0xFF3B82F6),
-                      ),
-                      SizedBox(width: 16),
-                      Text(
-                        'Edit Akun',
-                        style: TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 32),
-                  _modernTextField(usernameC, 'Username', Icons.person_rounded),
-                  SizedBox(height: 20),
-                  _modernTextField(
-                    namaC,
-                    'Nama Lengkap',
-                    Icons.account_circle_rounded,
-                  ),
-                  SizedBox(height: 20),
-                  StatefulBuilder(
-                    builder: (context, setStateDialog) => Column(
-                      children: [
-                        _modernTextField(
-                          nipC,
-                          selectedStatus == 'Karyawan'
-                              ? 'NIP/NISN (akan dihapus jika Karyawan)'
-                              : 'NIP/NISN (wajib)',
-                          Icons.badge_rounded,
-                          enabled: selectedStatus != 'Karyawan',
-                        ),
-                        SizedBox(height: 20),
-                        DropdownButtonFormField<String>(
-                          value: selectedRole,
-                          decoration: _dropdownDecoration(
-                            'Role Akun',
-                            Icons.shield_rounded,
-                          ),
-                          items: [
-                            DropdownMenuItem(
-                              value: 'user',
-                              child: _dropdownItem('User', Colors.green),
-                            ),
-                            DropdownMenuItem(
-                              value: 'admin',
-                              child: _dropdownItem('Admin', Colors.blue),
-                            ),
-                            DropdownMenuItem(
-                              value: 'superadmin',
-                              child: _dropdownItem('Super Admin', Colors.red),
-                            ),
-                          ],
-                          onChanged: (val) =>
-                              setStateDialog(() => selectedRole = val!),
-                        ),
-                        SizedBox(height: 20),
-                        DropdownButtonFormField<String>(
-                          value: selectedStatus,
-                          decoration: _dropdownDecoration(
-                            'Status Pegawai',
-                            Icons.work_rounded,
-                          ),
-                          items: _allowedStatuses
-                              .map(
-                                (s) => DropdownMenuItem(
-                                  value: s,
-                                  child: _dropdownItem(s, _getStatusColor(s)),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (val) {
-                            setStateDialog(() {
-                              selectedStatus = val!;
-                              if (selectedStatus == 'Karyawan') {
-                                nipC.clear();
-                              }
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 20),
-                  _modernTextField(
-                    passC,
-                    'Password Baru (kosongkan jika tidak ubah)',
-                    Icons.lock_rounded,
-                    obscureText: true,
-                  ),
-                  SizedBox(height: 40),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: Text('Batal', style: TextStyle(fontSize: 18)),
-                      ),
-                      SizedBox(width: 20),
-                      ElevatedButton(
-                        onPressed: () async {
-                          if (selectedStatus != 'Karyawan' &&
-                              nipC.text.trim().isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'NIP/NISN wajib diisi untuk Guru atau Staff Lain',
-                                ),
-                                backgroundColor: Colors.redAccent,
-                              ),
-                            );
-                            return;
-                          }
-
-                          final nipToSend = selectedStatus == 'Karyawan'
-                              ? ''
-                              : nipC.text.trim();
-
-                          try {
-                            final res = await ApiService.updateUser(
-                              id: user['id'].toString(),
-                              username: usernameC.text.trim(),
-                              namaLengkap: namaC.text.trim(),
-                              nipNisn: nipToSend,
-                              role: selectedRole,
-                              status: selectedStatus,
-                              password: passC.text.isEmpty
-                                  ? null
-                                  : passC.text.trim(),
-                            );
-
-                            if (res['status'] == 'success' ||
-                                res['status'] == true) {
-                              Navigator.pop(context, true);
-                              _loadUsers();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Akun berhasil diperbarui'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    res['message'] ?? 'Gagal update',
-                                  ),
-                                  backgroundColor: Colors.redAccent,
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Error: $e'),
-                                backgroundColor: Colors.redAccent,
-                              ),
-                            );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF3B82F6),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 40,
-                            vertical: 20,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(32),
-                          ),
-                        ),
-                        child: Text(
-                          'Simpan',
-                          style: TextStyle(fontSize: 18, color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    if (saved == true) _loadUsers();
-  }
-
-  InputDecoration _dropdownDecoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, size: 28, color: Color(0xFF3B82F6)),
-      filled: true,
-      fillColor: Colors.grey[100],
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(24),
-        borderSide: BorderSide.none,
-      ),
-      contentPadding: EdgeInsets.symmetric(horizontal: 28, vertical: 20),
-      labelStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-    );
-  }
-
-  Widget _dropdownItem(String text, Color color) {
-    return Row(
-      children: [
-        Container(
-          width: 14,
-          height: 14,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        SizedBox(width: 14),
-        Text(text, style: TextStyle(fontSize: 16)),
-      ],
-    );
-  }
-
-  Widget _modernTextField(
-    TextEditingController controller,
-    String label,
-    IconData icon, {
-    bool obscureText = false,
-    bool enabled = true,
-  }) {
-    return TextField(
-      controller: controller,
-      obscureText: obscureText,
-      enabled: enabled,
-      style: TextStyle(fontSize: 16, color: enabled ? null : Colors.grey[500]),
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(
-          icon,
-          size: 28,
-          color: enabled ? Color(0xFF3B82F6) : Colors.grey[400],
-        ),
-        filled: true,
-        fillColor: enabled ? Colors.grey[100] : Colors.grey[200],
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(24),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding: EdgeInsets.symmetric(horizontal: 28, vertical: 20),
-        labelStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-      ),
-    );
   }
 
   Color _getRoleColor(String role) {
     switch (role.toLowerCase()) {
       case 'superadmin':
-        return Color(0xFFEF4444);
+        return const Color(0xFFEF4444);
       case 'admin':
-        return Color(0xFF3B82F6);
+        return const Color(0xFF3B82F6);
       default:
-        return Color(0xFF10B981);
+        return const Color(0xFF10B981);
     }
   }
 
@@ -474,396 +628,387 @@ class _UserManagementPageState extends State<UserManagementPage> {
     }
   }
 
-  // DIPINDAHKAN KEMBALI KARENA DIPAKAI DI DROPDOWN EDIT
-  Color _getStatusColor(String status) {
-    switch (status.trim()) {
-      case 'Guru':
-        return Colors.orange;
-      case 'Staff Lain':
-        return Colors.purple;
-      case 'Karyawan':
-        return Colors.teal;
-      default:
-        return Colors.grey;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF1F5F9),
       body: Row(
         children: [
           // Sidebar
           Container(
-            width: 300,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
+            width: 280,
+            color: const Color(0xFF0F172A),
             child: Column(
               children: [
-                Container(
-                  padding: EdgeInsets.fromLTRB(32, 80, 32, 40),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Color(0xFF3B82F6), Color(0xFF1E40AF)],
-                          ),
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        child: Icon(
-                          Icons.manage_accounts_rounded,
-                          size: 48,
-                          color: Colors.white,
-                        ),
-                      ),
-                      SizedBox(width: 24),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Kelola User',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              'Admin & Staff',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(28, 60, 28, 40),
+                  child: Text(
+                    'Kelola User',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-                Divider(color: Colors.white12),
                 Padding(
-                  padding: EdgeInsets.all(32),
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
                   child: Column(
                     children: [
                       Text(
                         '${_filteredUsers.length}',
-                        style: TextStyle(
-                          color: Colors.white,
+                        style: const TextStyle(
                           fontSize: 56,
                           fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                       ),
-                      Text(
+                      const Text(
                         'Total Akun',
-                        style: TextStyle(color: Colors.white70, fontSize: 20),
+                        style: TextStyle(fontSize: 18, color: Colors.white70),
                       ),
                     ],
                   ),
                 ),
-                Spacer(),
+                const Spacer(),
+                Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: ElevatedButton.icon(
+                    onPressed: _addUser,
+                    icon: const Icon(Icons.person_add_rounded, size: 28),
+                    label: const Text(
+                      'Tambah User Baru',
+                      style: TextStyle(fontSize: 18),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 20,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(32),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
 
           // Main Content
           Expanded(
-            child: Column(
-              children: [
-                // Header
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 48, vertical: 32),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 20,
-                        offset: Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: Icon(Icons.arrow_back_rounded, size: 32),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.grey[200],
-                          padding: EdgeInsets.all(16),
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: Column(
+                children: [
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 48,
+                      vertical: 32,
+                    ),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 20,
+                          offset: Offset(0, 8),
                         ),
-                      ),
-                      SizedBox(width: 32),
-                      Text(
-                        'Manajemen User & Admin',
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.arrow_back_rounded, size: 32),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.grey[200],
+                            padding: EdgeInsets.all(16),
+                          ),
                         ),
-                      ),
-                      Spacer(),
-                      SizedBox(
-                        width: 400,
-                        child: TextField(
-                          controller: _searchC,
-                          decoration: InputDecoration(
-                            hintText: 'Cari nama, username, NIP/NISN...',
-                            prefixIcon: Icon(Icons.search_rounded, size: 28),
-                            suffixIcon: _searchC.text.isNotEmpty
-                                ? IconButton(
-                                    icon: Icon(Icons.clear_rounded),
-                                    onPressed: _searchC.clear,
-                                  )
-                                : null,
-                            filled: true,
-                            fillColor: Colors.grey[100],
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(30),
-                              borderSide: BorderSide.none,
+                        const SizedBox(width: 32),
+                        const Text(
+                          'Manajemen User & Admin',
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const Spacer(),
+                        SizedBox(
+                          width: 400,
+                          child: TextField(
+                            controller: _searchC,
+                            decoration: InputDecoration(
+                              hintText: 'Cari nama, username, NIP/NISN...',
+                              prefixIcon: const Icon(
+                                Icons.search_rounded,
+                                size: 28,
+                              ),
+                              suffixIcon: _searchC.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear_rounded),
+                                      onPressed: _searchC.clear,
+                                    )
+                                  : null,
+                              filled: true,
+                              fillColor: Colors.grey[100],
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(30),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 28,
+                                vertical: 18,
+                              ),
                             ),
-                            contentPadding: EdgeInsets.symmetric(
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        ),
+                        const SizedBox(width: 32),
+                        ElevatedButton.icon(
+                          onPressed: _loadUsers,
+                          icon: const Icon(Icons.refresh_rounded, size: 24),
+                          label: const Text(
+                            'Refresh',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            padding: const EdgeInsets.symmetric(
                               horizontal: 28,
                               vertical: 18,
                             ),
-                          ),
-                          style: TextStyle(fontSize: 16),
-                        ),
-                      ),
-                      SizedBox(width: 32),
-                      ElevatedButton.icon(
-                        onPressed: _loadUsers,
-                        icon: Icon(Icons.refresh_rounded, size: 24),
-                        label: Text('Refresh', style: TextStyle(fontSize: 16)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF10B981),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 28,
-                            vertical: 18,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
 
-                // List User
-                Expanded(
-                  child: _loading
-                      ? Center(
-                          child: CircularProgressIndicator(
-                            strokeWidth: 6,
-                            color: Color(0xFF3B82F6),
-                          ),
-                        )
-                      : _filteredUsers.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                _searchC.text.isNotEmpty
-                                    ? Icons.search_off_rounded
-                                    : Icons.manage_accounts_outlined,
-                                size: 120,
-                                color: Colors.grey[400],
-                              ),
-                              SizedBox(height: 32),
-                              Text(
-                                _searchC.text.isNotEmpty
-                                    ? 'Tidak ditemukan user'
-                                    : 'Belum ada akun terdaftar',
-                                style: TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey,
+                  // List User
+                  Expanded(
+                    child: _loading
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                              color: Color(0xFF3B82F6),
+                            ),
+                          )
+                        : _filteredUsers.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  _searchC.text.isNotEmpty
+                                      ? Icons.search_off_rounded
+                                      : Icons.people_outline_rounded,
+                                  size: 120,
+                                  color: Colors.grey[400],
                                 ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: EdgeInsets.fromLTRB(40, 32, 40, 60),
-                          itemCount: _filteredUsers.length,
-                          itemBuilder: (ctx, i) {
-                            final u = _filteredUsers[i];
-                            final role = (u['role'] ?? 'user')
-                                .toString()
-                                .toLowerCase();
-                            final roleColor = _getRoleColor(role);
-
-                            return Container(
-                              margin: EdgeInsets.only(bottom: 24),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(28),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: roleColor.withOpacity(0.12),
-                                    blurRadius: 25,
-                                    offset: Offset(0, 12),
+                                const SizedBox(height: 32),
+                                Text(
+                                  _searchC.text.isNotEmpty
+                                      ? 'Tidak ditemukan user'
+                                      : 'Belum ada user terdaftar',
+                                  style: const TextStyle(
+                                    fontSize: 28,
+                                    color: Colors.grey,
                                   ),
-                                ],
-                                border: Border.all(
-                                  color: roleColor.withOpacity(0.3),
-                                  width: 2,
                                 ),
-                              ),
-                              child: Padding(
-                                padding: EdgeInsets.all(32),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 100,
-                                      height: 100,
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            roleColor,
-                                            roleColor.withOpacity(0.7),
-                                          ],
-                                        ),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          (u['username'] ?? '?')[0]
-                                              .toUpperCase(),
-                                          style: TextStyle(
-                                            fontSize: 48,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(width: 40),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            u['nama_lengkap'] ?? 'Tanpa Nama',
-                                            style: TextStyle(
-                                              fontSize: 28,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          SizedBox(height: 16),
-                                          if (u['username'] != null)
-                                            _infoRow(
-                                              Icons.alternate_email_rounded,
-                                              'Username: ${u['username']}',
-                                            ),
-                                          if (u['nip_nisn']
-                                                  ?.toString()
-                                                  .isNotEmpty ==
-                                              true)
-                                            _infoRow(
-                                              Icons.badge_rounded,
-                                              'NIP/NISN: ${u['nip_nisn']}',
-                                            ),
-                                          SizedBox(height: 20),
-                                          // HANYA TAMPILKAN ROLE SAJA
-                                          Container(
-                                            padding: EdgeInsets.symmetric(
-                                              horizontal: 32,
-                                              vertical: 12,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: roleColor.withOpacity(
-                                                0.15,
-                                              ),
-                                              borderRadius:
-                                                  BorderRadius.circular(40),
-                                              border: Border.all(
-                                                color: roleColor.withOpacity(
-                                                  0.6,
-                                                ),
-                                                width: 3,
-                                              ),
-                                            ),
-                                            child: Text(
-                                              _getRoleLabel(role),
-                                              style: TextStyle(
-                                                color: roleColor,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 20,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Row(
-                                      children: [
-                                        IconButton(
-                                          onPressed: () => _editUser(u),
-                                          icon: Icon(
-                                            Icons.edit_rounded,
-                                            size: 32,
-                                          ),
-                                          color: Color(0xFF3B82F6),
-                                          tooltip: 'Edit',
-                                          style: IconButton.styleFrom(
-                                            backgroundColor: Colors.blue[50],
-                                            padding: EdgeInsets.all(16),
-                                          ),
-                                        ),
-                                        SizedBox(width: 12),
-                                        IconButton(
-                                          onPressed: () => _deleteUser(
-                                            u['id'].toString(),
-                                            role,
-                                          ),
-                                          icon: Icon(
-                                            Icons.delete_rounded,
-                                            size: 32,
-                                          ),
-                                          color: Colors.red,
-                                          tooltip: 'Hapus',
-                                          style: IconButton.styleFrom(
-                                            backgroundColor: Colors.red[50],
-                                            padding: EdgeInsets.all(16),
-                                          ),
-                                        ),
-                                      ],
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(40, 32, 40, 60),
+                            itemCount: _filteredUsers.length,
+                            itemBuilder: (ctx, i) {
+                              final u = _filteredUsers[i];
+                              final role = (u['role'] ?? 'user')
+                                  .toString()
+                                  .toLowerCase();
+                              final roleColor = _getRoleColor(role);
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 24),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(28),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: roleColor.withOpacity(0.12),
+                                      blurRadius: 25,
+                                      offset: const Offset(0, 12),
                                     ),
                                   ],
+                                  border: Border.all(
+                                    color: roleColor.withOpacity(0.3),
+                                    width: 2,
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
+                                child: Padding(
+                                  padding: const EdgeInsets.all(32),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 100,
+                                        height: 100,
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              roleColor,
+                                              roleColor.withOpacity(0.7),
+                                            ],
+                                          ),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            (u['username'] ?? '?')[0]
+                                                .toUpperCase(),
+                                            style: const TextStyle(
+                                              fontSize: 48,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 40),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              u['nama_lengkap'] ?? 'Tanpa Nama',
+                                              style: const TextStyle(
+                                                fontSize: 28,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 16),
+                                            if (u['username'] != null)
+                                              Text(
+                                                'Username: ${u['username']}',
+                                                style: const TextStyle(
+                                                  fontSize: 18,
+                                                ),
+                                              ),
+                                            if (u['nip_nisn']
+                                                    ?.toString()
+                                                    .isNotEmpty ==
+                                                true)
+                                              Text(
+                                                'NIP/NISN: ${u['nip_nisn']}',
+                                                style: const TextStyle(
+                                                  fontSize: 18,
+                                                ),
+                                              ),
+                                            const SizedBox(height: 20),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 32,
+                                                    vertical: 12,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: roleColor.withOpacity(
+                                                  0.15,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(40),
+                                                border: Border.all(
+                                                  color: roleColor.withOpacity(
+                                                    0.6,
+                                                  ),
+                                                  width: 3,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                _getRoleLabel(role),
+                                                style: TextStyle(
+                                                  color: roleColor,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 20,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Row(
+                                        children: [
+                                          IconButton(
+                                            onPressed: () => _editUser(u),
+                                            icon: const Icon(
+                                              Icons.edit_rounded,
+                                              size: 32,
+                                            ),
+                                            color: const Color(0xFF3B82F6),
+                                            tooltip: 'Edit',
+                                            style: IconButton.styleFrom(
+                                              backgroundColor: Colors.blue[50],
+                                              padding: const EdgeInsets.all(16),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          IconButton(
+                                            onPressed: () => _deleteUser(
+                                              u['id'].toString(),
+                                              role,
+                                            ),
+                                            icon: const Icon(
+                                              Icons.delete_rounded,
+                                              size: 32,
+                                            ),
+                                            color: Colors.red,
+                                            tooltip: 'Hapus',
+                                            style: IconButton.styleFrom(
+                                              backgroundColor: Colors.red[50],
+                                              padding: const EdgeInsets.all(16),
+                                            ),
+                                          ),
+                                          if (role == 'user')
+                                            const SizedBox(width: 12),
+                                          if (role == 'user')
+                                            IconButton(
+                                              onPressed: () => _resetDevice(
+                                                u['id'].toString(),
+                                                u['nama_lengkap'] ??
+                                                    u['username'],
+                                              ),
+                                              icon: const Icon(
+                                                Icons.phonelink_erase_rounded,
+                                                size: 32,
+                                              ),
+                                              color: Colors.orange,
+                                              tooltip: 'Reset Device ID',
+                                              style: IconButton.styleFrom(
+                                                backgroundColor:
+                                                    Colors.orange[50],
+                                                padding: const EdgeInsets.all(
+                                                  16,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoRow(IconData icon, String text) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 24, color: Color(0xFF3B82F6)),
-          SizedBox(width: 16),
-          Text(text, style: TextStyle(fontSize: 18, color: Colors.black87)),
         ],
       ),
     );
