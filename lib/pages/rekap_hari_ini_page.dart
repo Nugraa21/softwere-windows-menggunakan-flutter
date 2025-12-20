@@ -1,4 +1,4 @@
-// lib/pages/rekap_hari_ini_page.dart (VERSI FINAL + KALENDER TANGGAL)
+// lib/pages/rekap_hari_ini_page.dart (REKAP HARIAN + RANGE TANGGAL + TABEL LENGKAP)
 
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:open_file/open_file.dart';
 import 'package:intl/intl.dart';
 import '../api/api_service.dart';
+import 'package:intl/intl.dart';
 
 class RekapHariIniPage extends StatefulWidget {
   const RekapHariIniPage({super.key});
@@ -19,73 +20,33 @@ class RekapHariIniPage extends StatefulWidget {
 class _RekapHariIniPageState extends State<RekapHariIniPage> {
   bool _loading = true;
 
-  DateTime _selectedDate = DateTime.now(); // Tanggal yang sedang ditampilkan
+  DateTime? _startDate;
+  DateTime? _endDate;
 
-  int _totalUsers = 0;
-  int _masukBiasa = 0;
-  int _masukPenugasan = 0;
-  int _pulangBiasa = 0;
-  int _pulangPenugasan = 0;
-  int _penugasanFull = 0;
-  int _izin = 0;
-  int _pending = 0;
-  int _ditolak = 0;
+  List<dynamic> _allPresensi = [];
+  List<dynamic> _users = [];
 
-  List<dynamic> _presensiToday = [];
+  // Data rekap per user
+  List<Map<String, dynamic>> _rekapData = [];
 
   @override
   void initState() {
     super.initState();
-    _loadStats();
+    _startDate = DateTime.now();
+    _endDate = DateTime.now();
+    _loadData();
   }
 
-  Future<void> _loadStats() async {
+  Future<void> _loadData() async {
     setState(() => _loading = true);
     try {
-      final allPresensi = await ApiService.getAllPresensi();
+      final presensi = await ApiService.getAllPresensi();
       final users = await ApiService.getUsers();
-      final selectedDay = DateFormat('yyyy-MM-dd').format(_selectedDate);
-
-      final todayData = allPresensi.where((p) {
-        final created = (p['created_at'] ?? '').toString();
-        return created.length >= 10 && created.substring(0, 10) == selectedDay;
-      }).toList();
-
-      _presensiToday = todayData;
-
-      final masukBiasa = todayData.where((p) => p['jenis'] == 'Masuk').toList();
-      final masukPenugasan = todayData
-          .where((p) => p['jenis'] == 'Penugasan_Masuk')
-          .toList();
-      final pulangBiasa = todayData
-          .where((p) => p['jenis'] == 'Pulang')
-          .toList();
-      final pulangPenugasan = todayData
-          .where((p) => p['jenis'] == 'Penugasan_Pulang')
-          .toList();
-      final penugasanFull = todayData
-          .where((p) => p['jenis'] == 'Penugasan_Full')
-          .toList();
-      final izinAll = todayData
-          .where((p) => p['jenis'] == 'Izin' || p['jenis'] == 'Pulang Cepat')
-          .toList();
-      final pendingAll = todayData
-          .where((p) => p['status'] == 'Waiting')
-          .toList();
-      final ditolakAll = todayData
-          .where((p) => p['status'] == 'Ditolak')
-          .toList();
 
       setState(() {
-        _totalUsers = users.length;
-        _masukBiasa = masukBiasa.length;
-        _masukPenugasan = masukPenugasan.length;
-        _pulangBiasa = pulangBiasa.length;
-        _pulangPenugasan = pulangPenugasan.length;
-        _penugasanFull = penugasanFull.length;
-        _izin = izinAll.length;
-        _pending = pendingAll.length;
-        _ditolak = ditolakAll.length;
+        _allPresensi = presensi;
+        _users = users;
+        _processRekap();
       });
     } catch (e) {
       if (mounted) {
@@ -101,12 +62,109 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
     }
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
+  void _processRekap() {
+    if (_startDate == null || _endDate == null) return;
+
+    final Map<String, Map<String, dynamic>> rekapMap = {};
+
+    // Filter presensi dalam rentang tanggal
+    final filteredPresensi = _allPresensi.where((p) {
+      final dateStr = (p['created_at'] ?? '').toString();
+      if (dateStr.length < 10) return false;
+      final presensiDate = DateTime.tryParse(dateStr.substring(0, 10));
+      return presensiDate != null &&
+          presensiDate.isAfter(_startDate!.subtract(const Duration(days: 1))) &&
+          presensiDate.isBefore(_endDate!.add(const Duration(days: 1)));
+    }).toList();
+
+    // Kelompokkan per user
+    for (var user in _users) {
+      final userId = user['id'].toString();
+      final nama = user['nama_lengkap'] ?? '-';
+      final nip = user['nip_nisn'] ?? '';
+      final username = user['username'] ?? '-';
+
+      final userPresensi = filteredPresensi
+          .where((p) => p['user_id'].toString() == userId)
+          .toList();
+
+      // Cari absen masuk & pulang biasa
+      final masukBiasa = userPresensi.firstWhere(
+        (p) => p['jenis'] == 'Masuk',
+        orElse: () => null,
+      );
+      final pulangBiasa = userPresensi.firstWhere(
+        (p) => p['jenis'] == 'Pulang',
+        orElse: () => null,
+      );
+
+      // Jenis absen utama
+      String jenisAbsen = 'absen biasa';
+      String keterangan = '';
+
+      if (userPresensi.any(
+        (p) => p['jenis'] == 'Izin' || p['jenis'] == 'Pulang Cepat',
+      )) {
+        jenisAbsen = 'izin';
+        keterangan = 'sakit / dari inputan form';
+      } else if (userPresensi.any(
+        (p) =>
+            p['jenis'] == 'Penugasan_Masuk' || p['jenis'] == 'Penugasan_Pulang',
+      )) {
+        if (userPresensi.any((p) => p['jenis'] == 'Penugasan_Full')) {
+          jenisAbsen = 'penugasan full';
+          keterangan = masukBiasa?['status'] == 'Disetujui'
+              ? 'di terima'
+              : 'di tolak';
+        } else {
+          jenisAbsen = 'penugasan';
+          keterangan = 'di terima / di tolak';
+        }
+      } else if (userPresensi.any((p) => p['jenis'] == 'Pulang Cepat')) {
+        jenisAbsen = 'pulang cepat';
+        keterangan = 'di terima / di tolak';
+      } else if (masukBiasa != null && pulangBiasa != null) {
+        keterangan = 'di setujui';
+      } else {
+        keterangan = 'sangsi 3 jam tidak masuk';
+      }
+
+      rekapMap[userId] = {
+        'no': rekapMap.length + 1,
+        'nama': nama,
+        'nip': nip,
+        'jenis_absen': jenisAbsen,
+        'waktu_masuk': masukBiasa != null
+            ? masukBiasa['created_at'].substring(11, 16)
+            : '',
+        'absen_masuk': masukBiasa != null ? 'masuk' : '',
+        'waktu_pulang': pulangBiasa != null
+            ? pulangBiasa['created_at'].substring(11, 16)
+            : '',
+        'absen_pulang': pulangBiasa != null
+            ? (pulangBiasa['jenis'] == 'Pulang Cepat'
+                  ? 'pulang cepat'
+                  : 'pulang')
+            : '',
+        'keterangan': keterangan,
+      };
+    }
+
+    // Urutkan berdasarkan nama
+    final sortedList = rekapMap.values.toList()
+      ..sort((a, b) => (a['nama'] as String).compareTo(b['nama'] as String));
+
+    setState(() {
+      _rekapData = sortedList;
+    });
+  }
+
+  Future<void> _selectDateRange() async {
+    final picked = await showDateRangePicker(
       context: context,
-      initialDate: _selectedDate,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
+      initialDateRange: DateTimeRange(start: _startDate!, end: _endDate!),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: const ColorScheme.light(primary: Color(0xFF3B82F6)),
@@ -115,41 +173,19 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
       ),
     );
 
-    if (picked != null && picked != _selectedDate) {
+    if (picked != null) {
       setState(() {
-        _selectedDate = picked;
+        _startDate = picked.start;
+        _endDate = picked.end;
       });
-      _loadStats();
+      _processRekap();
     }
   }
-
-  String _getBgColorHex(String status) {
-    switch (status) {
-      case 'Disetujui':
-        return 'FFDCFCE7'; // Hijau muda
-      case 'Ditolak':
-        return 'FFFEE2E2'; // Merah muda
-      default:
-        return 'FFFFFBEB'; // Orange muda
-    }
-  }
-
-  xls.ExcelColor _getExcelBgColor(String status) {
-    return xls.ExcelColor.fromHexString('#${_getBgColorHex(status)}');
-  }
-
-  xls.ExcelColor _getExcelHeaderColor() =>
-      xls.ExcelColor.fromHexString('#FF3B82F6'); // Biru header
-
-  xls.ExcelColor _getExcelFontColor() =>
-      xls.ExcelColor.fromHexString('#FFFFFFFF'); // Putih teks
 
   Future<void> _exportToExcel() async {
-    if (_presensiToday.isEmpty) {
+    if (_rekapData.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Tidak ada data presensi untuk tanggal ini!'),
-        ),
+        const SnackBar(content: Text('Tidak ada data untuk diexport!')),
       );
       return;
     }
@@ -165,93 +201,72 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
         return;
       }
       dir = Directory('/storage/emulated/0/Download');
-      if (!await dir.exists()) await dir.create(recursive: true);
     } else {
       dir = await getApplicationDocumentsDirectory();
     }
 
-    final dateStr = DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate);
-    final fileName = 'Rekap_Presensi_$dateStr.xlsx';
-    final path = '${dir.path}/$fileName';
+    final dateRange =
+        '${DateFormat('dd-MM-yyyy').format(_startDate!)} sampai ${DateFormat('dd-MM-yyyy').format(_endDate!)}';
+    final fileName = 'Rekap_Presensi_$dateRange.xlsx';
+    final path = '${dir!.path}/$fileName';
 
     var excel = xls.Excel.createExcel();
     excel.delete('Sheet1');
-    xls.Sheet sheet = excel['Rekap Tanggal Ini'];
+    xls.Sheet sheet = excel['Rekap Harian'];
 
     // Header
     sheet.appendRow([
       xls.TextCellValue('No'),
-      xls.TextCellValue('Nama Lengkap'),
-      xls.TextCellValue('Username'),
+      xls.TextCellValue('Nama'),
+      xls.TextCellValue('NIP'),
       xls.TextCellValue('Jenis Absen'),
-      xls.TextCellValue('Status'),
-      xls.TextCellValue('Waktu'),
+      xls.TextCellValue('Waktu Absen Masuk'),
+      xls.TextCellValue('Absen Masuk'),
+      xls.TextCellValue('Waktu Pulang'),
+      xls.TextCellValue('Absen Pulang'),
       xls.TextCellValue('Keterangan'),
     ]);
 
     // Styling header
-    for (int i = 0; i < 7; i++) {
+    final headerColor = xls.ExcelColor.fromHexString('#FF3B82F6');
+    final headerFont = xls.ExcelColor.fromHexString('#FFFFFFFF');
+    for (int i = 0; i < 9; i++) {
       final cell = sheet.cell(
         xls.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0),
       );
       cell.cellStyle = xls.CellStyle(
         bold: true,
-        backgroundColorHex: _getExcelHeaderColor(),
-        fontColorHex: _getExcelFontColor(),
+        backgroundColorHex: headerColor,
+        fontColorHex: headerFont,
         horizontalAlign: xls.HorizontalAlign.Center,
       );
     }
 
-    // Data
-    int no = 1;
-    for (var p in _presensiToday) {
-      final nama = p['nama_lengkap'] ?? '-';
-      final username = p['username'] ?? '-';
-      final jenis = p['jenis'] ?? '-';
-      final status = p['status'] ?? 'Waiting';
-      final waktu = p['created_at']?.toString().substring(11, 19) ?? '-';
-      final keterangan = status != 'Disetujui'
-          ? 'Tidak Disetujui'
-          : (p['keterangan'] ?? '-');
-
+    // Isi data
+    for (var item in _rekapData) {
       sheet.appendRow([
-        xls.TextCellValue(no.toString()),
-        xls.TextCellValue(nama),
-        xls.TextCellValue(username),
-        xls.TextCellValue(jenis),
-        xls.TextCellValue(status),
-        xls.TextCellValue(waktu),
-        xls.TextCellValue(keterangan),
+        xls.TextCellValue(item['no'].toString()),
+        xls.TextCellValue(item['nama']),
+        xls.TextCellValue(item['nip']),
+        xls.TextCellValue(item['jenis_absen']),
+        xls.TextCellValue(item['waktu_masuk']),
+        xls.TextCellValue(item['absen_masuk']),
+        xls.TextCellValue(item['waktu_pulang']),
+        xls.TextCellValue(item['absen_pulang']),
+        xls.TextCellValue(item['keterangan']),
       ]);
-
-      // Styling baris berdasarkan status
-      for (int i = 0; i < 7; i++) {
-        final cell = sheet.cell(
-          xls.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: no),
-        );
-        cell.cellStyle = xls.CellStyle(
-          backgroundColorHex: _getExcelBgColor(status),
-        );
-      }
-
-      no++;
     }
 
-    await File(path).writeAsBytes(excel.encode()!);
+    final bytes = excel.encode()!;
+    await File(path).writeAsBytes(bytes);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Berhasil diexport: $fileName'),
           backgroundColor: const Color(0xFF10B981),
-          duration: const Duration(seconds: 6),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
           action: SnackBarAction(
             label: 'BUKA',
-            textColor: Colors.white,
             onPressed: () => OpenFile.open(path),
           ),
         ),
@@ -259,555 +274,166 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
     }
   }
 
-  void _showDetail(String title, List<dynamic> list) {
-    if (list.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Tidak ada data untuk "$title"')));
-      return;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      backgroundColor: Colors.white,
-      builder: (_) => Container(
-        height: MediaQuery.of(context).size.height * 0.9,
-        padding: EdgeInsets.all(32),
-        child: Column(
-          children: [
-            Container(
-              width: 60,
-              height: 6,
-              decoration: BoxDecoration(
-                color: Colors.grey[400],
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            SizedBox(height: 20),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF0F172A),
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              '${list.length} presensi',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-            ),
-            SizedBox(height: 20),
-            Expanded(
-              child: ListView.builder(
-                itemCount: list.length,
-                itemBuilder: (_, i) {
-                  final p = list[i];
-                  final nama = p['nama_lengkap'] ?? 'Unknown';
-                  final username = p['username'] ?? '-';
-                  final jenis = p['jenis'] ?? '-';
-                  final status = p['status'] ?? 'Waiting';
-                  final waktu =
-                      p['created_at']?.toString().substring(11, 19) ?? '-';
-
-                  Color statusColor = status == 'Disetujui'
-                      ? Colors.green
-                      : status == 'Ditolak'
-                      ? Colors.red
-                      : Colors.orange;
-
-                  return Card(
-                    margin: EdgeInsets.symmetric(vertical: 8),
-                    elevation: 8,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: ListTile(
-                      contentPadding: EdgeInsets.all(20),
-                      leading: CircleAvatar(
-                        radius: 32,
-                        backgroundColor: statusColor.withOpacity(0.2),
-                        child: Text(
-                          nama[0].toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: statusColor,
-                          ),
-                        ),
-                      ),
-                      title: Text(
-                        nama,
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Username: $username',
-                            style: TextStyle(fontSize: 15),
-                          ),
-                          Text('Jenis: $jenis', style: TextStyle(fontSize: 15)),
-                          Text(
-                            'Status: $status',
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: statusColor,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Text('Waktu: $waktu', style: TextStyle(fontSize: 15)),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color, {
-    VoidCallback? onTap,
-  }) {
-    return MouseRegion(
-      cursor: onTap != null
-          ? SystemMouseCursors.click
-          : SystemMouseCursors.basic,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 30,
-                offset: Offset(0, 15),
-              ),
-            ],
-            border: Border.all(color: color.withOpacity(0.3), width: 2),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(icon, size: 40, color: color),
-                  ),
-                  Spacer(),
-                  Text(
-                    value,
-                    style: TextStyle(
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 24),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width > 1200;
-    final selectedDayStr = DateFormat(
-      'EEEE, dd MMMM yyyy',
-      'id_ID',
-    ).format(_selectedDate);
+    final dateRangeStr = _startDate == null || _endDate == null
+        ? 'Pilih Rentang Tanggal'
+        : '${DateFormat('dd MMM yyyy', 'id_ID').format(_startDate!)} - ${DateFormat('dd MMM yyyy', 'id_ID').format(_endDate!)}';
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      body: Row(
+      body: Column(
         children: [
-          // Sidebar Kiri
+          // Header
           Container(
-            width: 300,
+            padding: const EdgeInsets.all(32),
             decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 20,
+                  offset: Offset(0, 8),
+                ),
+              ],
             ),
-            child: Column(
+            child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.fromLTRB(32, 60, 32, 40),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Color(0xFF3B82F6), Color(0xFF1E40AF)],
-                          ),
-                          borderRadius: BorderRadius.all(Radius.circular(20)),
-                        ),
-                        child: const Icon(
-                          Icons.today_rounded,
-                          size: 52,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(width: 20),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Rekap Presensi',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              'Harian',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 36),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.grey[200],
+                    padding: EdgeInsets.all(20),
                   ),
                 ),
-                const Divider(color: Colors.white12),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text(
-                          'Tanggal',
-                          style: TextStyle(color: Colors.white70, fontSize: 18),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          selectedDayStr,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 40),
-                        const Text(
-                          'Total User',
-                          style: TextStyle(color: Colors.white70, fontSize: 18),
-                        ),
-                        Text(
-                          '$_totalUsers',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 48,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
+                const SizedBox(width: 32),
+                const Text(
+                  'Rekap Presensi Harian',
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                Text(
+                  dateRangeStr,
+                  style: const TextStyle(fontSize: 20, color: Colors.grey),
+                ),
+                const SizedBox(width: 24),
+                ElevatedButton.icon(
+                  onPressed: _selectDateRange,
+                  icon: const Icon(Icons.date_range_rounded),
+                  label: const Text('Pilih Rentang Tanggal'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF3B82F6),
+                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                ElevatedButton.icon(
+                  onPressed: _loadData,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Refresh'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF3B82F6),
+                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                ElevatedButton.icon(
+                  onPressed: _exportToExcel,
+                  icon: const Icon(Icons.download_rounded),
+                  label: const Text('Export Excel'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF10B981),
+                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 20),
                   ),
                 ),
               ],
             ),
           ),
 
-          // Main Content
+          // Tabel Rekap
           Expanded(
-            child: Column(
-              children: [
-                // Header
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 40,
-                    vertical: 32,
-                  ),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 20,
-                        offset: Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.arrow_back_rounded, size: 36),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.grey[200],
-                          padding: const EdgeInsets.all(20),
+            child: _loading
+                ? const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
+                  )
+                : _rekapData.isEmpty
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.table_chart_outlined,
+                          size: 120,
+                          color: Colors.grey,
                         ),
-                      ),
-                      const SizedBox(width: 32),
-                      Text(
-                        'Rekap Presensi Harian - $selectedDayStr',
-                        style: TextStyle(
-                          fontSize: 32,
+                        SizedBox(height: 32),
+                        Text(
+                          'Tidak ada data presensi',
+                          style: TextStyle(fontSize: 28, color: Colors.grey),
+                        ),
+                        Text(
+                          'Pilih rentang tanggal yang sesuai',
+                          style: TextStyle(fontSize: 18, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  )
+                : SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(40),
+                      child: DataTable(
+                        headingRowHeight: 60,
+                        dataRowHeight: 70,
+                        headingTextStyle: const TextStyle(
                           fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
-                      ),
-                      const Spacer(),
-                      ElevatedButton.icon(
-                        onPressed: _pickDate,
-                        icon: const Icon(Icons.calendar_today_rounded),
-                        label: const Text('Pilih Tanggal'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF3B82F6),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 32,
-                            vertical: 20,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
+                        headingRowColor: MaterialStatePropertyAll(
+                          Color(0xFF3B82F6),
                         ),
+                        columns: const [
+                          DataColumn(label: Text('No')),
+                          DataColumn(label: Text('Nama')),
+                          DataColumn(label: Text('NIP')),
+                          DataColumn(label: Text('Jenis Absen')),
+                          DataColumn(label: Text('Waktu Absen Masuk')),
+                          DataColumn(label: Text('Absen Masuk')),
+                          DataColumn(label: Text('Waktu Pulang')),
+                          DataColumn(label: Text('Absen Pulang')),
+                          DataColumn(label: Text('Keterangan')),
+                        ],
+                        rows: _rekapData.map((item) {
+                          return DataRow(
+                            cells: [
+                              DataCell(Text(item['no'].toString())),
+                              DataCell(Text(item['nama'])),
+                              DataCell(Text(item['nip'])),
+                              DataCell(Text(item['jenis_absen'])),
+                              DataCell(Text(item['waktu_masuk'])),
+                              DataCell(Text(item['absen_masuk'])),
+                              DataCell(Text(item['waktu_pulang'])),
+                              DataCell(Text(item['absen_pulang'])),
+                              DataCell(
+                                Text(
+                                  item['keterangan'],
+                                  style: TextStyle(
+                                    color:
+                                        item['keterangan'].contains('sangsi') ||
+                                            item['keterangan'].contains('tolak')
+                                        ? Colors.red
+                                        : Colors.green,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
                       ),
-                      const SizedBox(width: 16),
-                      ElevatedButton.icon(
-                        onPressed: _loadStats,
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('Refresh'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF3B82F6),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 32,
-                            vertical: 20,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      ElevatedButton.icon(
-                        onPressed: _exportToExcel,
-                        icon: const Icon(Icons.download_rounded),
-                        label: const Text('Export Excel'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF10B981),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 32,
-                            vertical: 20,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-
-                // Body
-                Expanded(
-                  child: _loading
-                      ? const Center(
-                          child: CircularProgressIndicator(
-                            color: Color(0xFF3B82F6),
-                          ),
-                        )
-                      : _presensiToday.isEmpty
-                      ? const Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.event_busy_rounded,
-                                size: 140,
-                                color: Colors.grey,
-                              ),
-                              SizedBox(height: 40),
-                              Text(
-                                'Belum ada presensi pada tanggal ini',
-                                style: TextStyle(
-                                  fontSize: 28,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              Text(
-                                'Tunggu karyawan melakukan absen atau pilih tanggal lain',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : SingleChildScrollView(
-                          padding: const EdgeInsets.all(48),
-                          child: GridView.count(
-                            shrinkWrap: true,
-                            physics: NeverScrollableScrollPhysics(),
-                            crossAxisCount: isWide ? 4 : 2,
-                            childAspectRatio: 1.5,
-                            crossAxisSpacing: 32,
-                            mainAxisSpacing: 32,
-                            children: [
-                              _buildStatCard(
-                                'Total Users',
-                                '$_totalUsers',
-                                Icons.people_rounded,
-                                Color(0xFF3B82F6),
-                              ),
-                              _buildStatCard(
-                                'Masuk Biasa',
-                                '$_masukBiasa',
-                                Icons.login_rounded,
-                                Color(0xFF10B981),
-                                onTap: () => _showDetail(
-                                  'Absen Masuk Biasa',
-                                  _presensiToday
-                                      .where((p) => p['jenis'] == 'Masuk')
-                                      .toList(),
-                                ),
-                              ),
-                              _buildStatCard(
-                                'Masuk Penugasan',
-                                '$_masukPenugasan',
-                                Icons.assignment_ind_rounded,
-                                Color(0xFF8B5CF6),
-                                onTap: () => _showDetail(
-                                  'Masuk Penugasan',
-                                  _presensiToday
-                                      .where(
-                                        (p) => p['jenis'] == 'Penugasan_Masuk',
-                                      )
-                                      .toList(),
-                                ),
-                              ),
-                              _buildStatCard(
-                                'Pulang Biasa',
-                                '$_pulangBiasa',
-                                Icons.logout_rounded,
-                                Color(0xFFF59E0B),
-                                onTap: () => _showDetail(
-                                  'Pulang Biasa',
-                                  _presensiToday
-                                      .where((p) => p['jenis'] == 'Pulang')
-                                      .toList(),
-                                ),
-                              ),
-                              _buildStatCard(
-                                'Pulang Penugasan',
-                                '$_pulangPenugasan',
-                                Icons.assignment_return_rounded,
-                                Color(0xFF6366F1),
-                                onTap: () => _showDetail(
-                                  'Pulang Penugasan',
-                                  _presensiToday
-                                      .where(
-                                        (p) => p['jenis'] == 'Penugasan_Pulang',
-                                      )
-                                      .toList(),
-                                ),
-                              ),
-                              _buildStatCard(
-                                'Penugasan Full',
-                                '$_penugasanFull',
-                                Icons.assignment_turned_in_rounded,
-                                Color(0xFF8B5CF6),
-                                onTap: () => _showDetail(
-                                  'Penugasan Full',
-                                  _presensiToday
-                                      .where(
-                                        (p) => p['jenis'] == 'Penugasan_Full',
-                                      )
-                                      .toList(),
-                                ),
-                              ),
-                              _buildStatCard(
-                                'Izin / Tidak Hadir',
-                                '$_izin',
-                                Icons.sick_rounded,
-                                Color(0xFFEF4444),
-                                onTap: () => _showDetail(
-                                  'Izin / Tidak Hadir',
-                                  _presensiToday
-                                      .where(
-                                        (p) =>
-                                            p['jenis'] == 'Izin' ||
-                                            p['jenis'] == 'Pulang Cepat',
-                                      )
-                                      .toList(),
-                                ),
-                              ),
-                              _buildStatCard(
-                                'Menunggu Approval',
-                                '$_pending',
-                                Icons.pending_actions_rounded,
-                                Color(0xFFF59E0B),
-                                onTap: () => _showDetail(
-                                  'Menunggu Approval',
-                                  _presensiToday
-                                      .where((p) => p['status'] == 'Waiting')
-                                      .toList(),
-                                ),
-                              ),
-                              _buildStatCard(
-                                'Ditolak',
-                                '$_ditolak',
-                                Icons.cancel_rounded,
-                                Color(0xFFEF4444),
-                                onTap: () => _showDetail(
-                                  'Ditolak',
-                                  _presensiToday
-                                      .where((p) => p['status'] == 'Ditolak')
-                                      .toList(),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
