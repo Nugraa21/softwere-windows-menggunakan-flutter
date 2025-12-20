@@ -225,19 +225,23 @@ class _UserManagementPageState extends State<UserManagementPage>
                     ),
                   ),
                   const SizedBox(height: 16),
-                  TextField(
-                    controller: nipC,
-                    decoration: InputDecoration(
-                      labelText: 'NIP/NISN (opsional)',
-                      prefixIcon: const Icon(Icons.badge_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
+
+                  // === FIELD NIP/NISN HANYA MUNCUL JIKA STATUS = GURU ===
+                  if (selectedStatus == 'Guru')
+                    TextField(
+                      controller: nipC,
+                      decoration: InputDecoration(
+                        labelText: 'NIP/NISN * (wajib untuk Guru)',
+                        prefixIcon: const Icon(Icons.badge_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
                       ),
-                      filled: true,
-                      fillColor: Colors.grey[50],
                     ),
-                  ),
-                  const SizedBox(height: 16),
+                  if (selectedStatus == 'Guru') const SizedBox(height: 16),
+
                   DropdownButtonFormField<String>(
                     value: selectedRole,
                     decoration: InputDecoration(
@@ -261,10 +265,12 @@ class _UserManagementPageState extends State<UserManagementPage>
                         setStateDialog(() => selectedRole = val!),
                   ),
                   const SizedBox(height: 16),
+
+                  // Dropdown Status
                   DropdownButtonFormField<String>(
                     value: selectedStatus,
                     decoration: InputDecoration(
-                      labelText: 'Status',
+                      labelText: 'Status Pegawai',
                       prefixIcon: const Icon(Icons.work_outline_rounded),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -283,10 +289,18 @@ class _UserManagementPageState extends State<UserManagementPage>
                         child: Text('Staff Lain'),
                       ),
                     ],
-                    onChanged: (val) =>
-                        setStateDialog(() => selectedStatus = val!),
+                    onChanged: (val) {
+                      setStateDialog(() {
+                        selectedStatus = val!;
+                        // Reset NIP kalau status bukan Guru
+                        if (selectedStatus != 'Guru') {
+                          nipC.clear();
+                        }
+                      });
+                    },
                   ),
                   const SizedBox(height: 16),
+
                   TextField(
                     controller: passC,
                     obscureText: true,
@@ -313,12 +327,25 @@ class _UserManagementPageState extends State<UserManagementPage>
               onPressed: isLoading
                   ? null
                   : () async {
+                      // Validasi field wajib
                       if (usernameC.text.trim().isEmpty ||
                           namaC.text.trim().isEmpty ||
                           passC.text.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Field bertanda * wajib diisi'),
+                            backgroundColor: Color(0xFFEF4444),
+                          ),
+                        );
+                        return;
+                      }
+
+                      // Khusus Guru: NIP wajib diisi
+                      if (selectedStatus == 'Guru' &&
+                          nipC.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('NIP/NISN wajib diisi untuk Guru'),
                             backgroundColor: Color(0xFFEF4444),
                           ),
                         );
@@ -332,10 +359,9 @@ class _UserManagementPageState extends State<UserManagementPage>
                           username: usernameC.text.trim(),
                           namaLengkap: namaC.text.trim(),
                           password: passC.text,
-                          nipNisn: nipC.text.trim().isEmpty
-                              ? ''
-                              : nipC.text
-                                    .trim(), // DIPERBAIKI: kirim string kosong, bukan null
+                          nipNisn: selectedStatus == 'Guru'
+                              ? nipC.text.trim()
+                              : '', // Kalau bukan Guru, kirim string kosong
                           role: selectedRole,
                           status: selectedStatus,
                         );
@@ -544,11 +570,28 @@ class _UserManagementPageState extends State<UserManagementPage>
   }
 
   // ================== HAPUS USER ==================
-  Future<void> _deleteUser(String id, String role) async {
-    if (role.toLowerCase() == 'superadmin') {
+  // ================== HAPUS USER ==================
+  Future<void> _deleteUser(String id, String role, String nama) async {
+    // Ambil role user yang sedang login
+    final currentUser = await ApiService.getCurrentUser();
+    final currentRole = currentUser?['role'] ?? 'user';
+
+    // Hanya superadmin yang boleh menghapus
+    if (currentRole != 'superadmin') {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Tidak boleh hapus superadmin'),
+          content: Text('Hanya superadmin yang boleh menghapus user'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
+      return;
+    }
+
+    // Superadmin tidak boleh hapus superadmin lain
+    if ((role ?? '').toString().toLowerCase() == 'superadmin') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tidak boleh menghapus akun superadmin'),
           backgroundColor: Color(0xFFEF4444),
         ),
       );
@@ -566,8 +609,8 @@ class _UserManagementPageState extends State<UserManagementPage>
             Text('Hapus User', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
-        content: const Text(
-          'Yakin ingin menghapus user ini? Tidak bisa dibatalkan.',
+        content: Text(
+          'Yakin ingin menghapus user "$nama"?\nTindakan ini tidak dapat dibatalkan.',
         ),
         actions: [
           TextButton(
@@ -589,13 +632,23 @@ class _UserManagementPageState extends State<UserManagementPage>
 
     try {
       final res = await ApiService.deleteUser(id);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(res['message'] ?? 'User dihapus'),
-          backgroundColor: const Color(0xFF10B981),
-        ),
-      );
-      _loadUsers();
+
+      if (res['status'] == true || res['status'] == 'success') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message'] ?? 'User berhasil dihapus'),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+        _loadUsers(); // Refresh daftar user
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message'] ?? 'Gagal menghapus user'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -961,6 +1014,9 @@ class _UserManagementPageState extends State<UserManagementPage>
                                             onPressed: () => _deleteUser(
                                               u['id'].toString(),
                                               role,
+                                              u['nama_lengkap'] ??
+                                                  u['username'] ??
+                                                  'User',
                                             ),
                                             icon: const Icon(
                                               Icons.delete_rounded,
