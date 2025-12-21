@@ -1,6 +1,5 @@
 // lib/pages/rekap_hari_ini_page.dart
-// REKAP HARIAN - TAMPILAN SUPER ELEGAN, PROFESIONAL, TANPA BUG & OVERFLOW
-
+// REKAP HARIAN - MULTI HARI PER KARYAWAN, TANGGAL DI KOLOM PERTAMA
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:excel/excel.dart' as xls;
@@ -12,22 +11,17 @@ import '../api/api_service.dart';
 
 class RekapHariIniPage extends StatefulWidget {
   const RekapHariIniPage({super.key});
-
   @override
   State<RekapHariIniPage> createState() => _RekapHariIniPageState();
 }
 
 class _RekapHariIniPageState extends State<RekapHariIniPage> {
   bool _loading = true;
-
   DateTime? _startDate;
   DateTime? _endDate;
-
   List<dynamic> _allPresensi = [];
   List<dynamic> _users = [];
-
   List<Map<String, dynamic>> _rekapData = [];
-
   final TextEditingController _searchC = TextEditingController();
   List<Map<String, dynamic>> _filteredData = [];
 
@@ -52,7 +46,6 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
     try {
       final presensi = await ApiService.getAllPresensi();
       final users = await ApiService.getUsers();
-
       setState(() {
         _allPresensi = presensi;
         _users = users;
@@ -75,99 +68,120 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
   void _processRekap() {
     if (_startDate == null || _endDate == null) return;
 
-    final Map<String, Map<String, dynamic>> rekapMap = {};
+    // Group presensi per user per tanggal
+    final Map<String, Map<String, List<dynamic>>> userDatePresensi = {};
 
-    final filteredPresensi = _allPresensi.where((p) {
-      final dateStr = (p['created_at'] ?? '').toString();
-      if (dateStr.length < 10) return false;
-      final presensiDate = DateTime.tryParse(dateStr.substring(0, 10));
-      return presensiDate != null &&
-          presensiDate.isAfter(_startDate!.subtract(const Duration(days: 1))) &&
-          presensiDate.isBefore(_endDate!.add(const Duration(days: 1)));
-    }).toList();
+    for (var p in _allPresensi) {
+      final dateStrFull = (p['created_at'] ?? '').toString();
+      if (dateStrFull.length < 10) continue;
+      final dateStr = dateStrFull.substring(0, 10); // YYYY-MM-DD
+      final presensiDate = DateTime.tryParse(dateStr);
+      if (presensiDate == null) continue;
 
+      if (presensiDate.isAfter(_startDate!.subtract(const Duration(days: 1))) &&
+          presensiDate.isBefore(_endDate!.add(const Duration(days: 1)))) {
+        final userId = p['user_id'].toString();
+        userDatePresensi.putIfAbsent(userId, () => {});
+        userDatePresensi[userId]!.putIfAbsent(dateStr, () => []);
+        userDatePresensi[userId]![dateStr]!.add(p);
+      }
+    }
+
+    final List<Map<String, dynamic>> tempRekap = [];
     int no = 1;
+
     for (var user in _users) {
       final userId = user['id'].toString();
       final nama = user['nama_lengkap'] ?? '-';
       final nip = user['nip_nisn'] ?? '';
 
-      final userPresensi = filteredPresensi
-          .where((p) => p['user_id'].toString() == userId)
-          .toList();
+      final userDates = userDatePresensi[userId];
+      if (userDates == null || userDates.isEmpty) continue;
 
-      final masukBiasa = userPresensi.firstWhere(
-        (p) => p['jenis'] == 'Masuk',
-        orElse: () => null,
-      );
-      final pulangBiasa = userPresensi.firstWhere(
-        (p) => p['jenis'] == 'Pulang',
-        orElse: () => null,
-      );
+      // Urutkan tanggal
+      final sortedDates = userDates.keys.toList()..sort();
 
-      final approvalRecord = userPresensi.firstWhere(
-        (p) =>
-            p['jenis'] == 'Izin' ||
-            p['jenis'] == 'Pulang Cepat' ||
-            p['jenis'] == 'Penugasan_Masuk' ||
-            p['jenis'] == 'Penugasan_Pulang' ||
-            p['jenis'] == 'Penugasan_Full',
-        orElse: () => null,
-      );
+      for (var dateStr in sortedDates) {
+        final dayPresensi = userDates[dateStr]!;
 
-      String jenisAbsen = 'absen biasa';
-      String keterangan = '';
+        final masukBiasa = dayPresensi.firstWhere(
+          (p) => p['jenis'] == 'Masuk',
+          orElse: () => null,
+        );
+        final pulangBiasa = dayPresensi.firstWhere(
+          (p) => p['jenis'] == 'Pulang',
+          orElse: () => null,
+        );
 
-      if (approvalRecord != null) {
-        if (approvalRecord['jenis'] == 'Izin') {
-          jenisAbsen = 'izin';
-        } else if (approvalRecord['jenis'] == 'Pulang Cepat') {
-          jenisAbsen = 'pulang cepat';
-        } else if (approvalRecord['jenis'] == 'Penugasan_Full') {
-          jenisAbsen = 'penugasan full';
+        final approvalRecord = dayPresensi.firstWhere(
+          (p) =>
+              p['jenis'] == 'Izin' ||
+              p['jenis'] == 'Pulang Cepat' ||
+              p['jenis'] == 'Penugasan_Masuk' ||
+              p['jenis'] == 'Penugasan_Pulang' ||
+              p['jenis'] == 'Penugasan_Full',
+          orElse: () => null,
+        );
+
+        String jenisAbsen = 'absen biasa';
+        String keterangan = '';
+
+        if (approvalRecord != null) {
+          if (approvalRecord['jenis'] == 'Izin') {
+            jenisAbsen = 'izin';
+          } else if (approvalRecord['jenis'] == 'Pulang Cepat') {
+            jenisAbsen = 'pulang cepat';
+          } else if (approvalRecord['jenis'] == 'Penugasan_Full') {
+            jenisAbsen = 'penugasan full';
+          } else {
+            jenisAbsen = 'penugasan';
+          }
+
+          final status = approvalRecord['status'] ?? 'Waiting';
+          if (status == 'Disetujui') {
+            keterangan = 'di terima';
+          } else if (status == 'Ditolak') {
+            keterangan = 'di tolak';
+          } else {
+            keterangan = 'di terima / di tolak';
+          }
         } else {
-          jenisAbsen = 'penugasan';
+          if (masukBiasa != null && pulangBiasa != null) {
+            keterangan = 'di setujui';
+          } else {
+            keterangan = 'sangsi 3 jam tidak masuk';
+          }
         }
 
-        final status = approvalRecord['status'] ?? 'Waiting';
-        if (status == 'Disetujui') {
-          keterangan = 'di terima';
-        } else if (status == 'Ditolak') {
-          keterangan = 'di tolak';
-        } else {
-          keterangan = 'di terima / di tolak';
-        }
-      } else {
-        if (masukBiasa != null && pulangBiasa != null) {
-          keterangan = 'di setujui';
-        } else {
-          keterangan = 'sangsi 3 jam tidak masuk';
-        }
+        tempRekap.add({
+          'no': no++,
+          'tanggal': dateStr.substring(8, 10), // dd (01, 02, dst.)
+          'nama': nama,
+          'nip': nip,
+          'jenis_absen': jenisAbsen,
+          'waktu_masuk': masukBiasa != null
+              ? masukBiasa['created_at'].substring(11, 16)
+              : '',
+          'absen_masuk': masukBiasa != null ? 'masuk' : '',
+          'waktu_pulang': pulangBiasa != null
+              ? pulangBiasa['created_at'].substring(11, 16)
+              : '',
+          'absen_pulang': pulangBiasa != null ? 'pulang' : '',
+          'keterangan': keterangan,
+        });
       }
-
-      rekapMap[userId] = {
-        'no': no++,
-        'nama': nama,
-        'nip': nip,
-        'jenis_absen': jenisAbsen,
-        'waktu_masuk': masukBiasa != null
-            ? masukBiasa['created_at'].substring(11, 16)
-            : '',
-        'absen_masuk': masukBiasa != null ? 'masuk' : '',
-        'waktu_pulang': pulangBiasa != null
-            ? pulangBiasa['created_at'].substring(11, 16)
-            : '',
-        'absen_pulang': pulangBiasa != null ? 'pulang' : '',
-        'keterangan': keterangan,
-      };
     }
 
-    final sortedList = rekapMap.values.toList()
-      ..sort((a, b) => (a['nama'] as String).compareTo(b['nama'] as String));
+    // Sort by nama lalu tanggal
+    tempRekap.sort((a, b) {
+      int cmp = (a['nama'] as String).compareTo(b['nama'] as String);
+      if (cmp != 0) return cmp;
+      return a['tanggal'].compareTo(b['tanggal']);
+    });
 
     setState(() {
-      _rekapData = sortedList;
-      _filteredData = List.from(sortedList);
+      _rekapData = tempRekap;
+      _filteredData = List.from(tempRekap);
     });
   }
 
@@ -198,7 +212,6 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
         child: child!,
       ),
     );
-
     if (picked != null) {
       setState(() {
         _startDate = picked.start;
@@ -240,8 +253,9 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
     excel.delete('Sheet1');
     xls.Sheet sheet = excel['Rekap Harian'];
 
+    // Header baru: Tanggal di kolom pertama
     sheet.appendRow([
-      xls.TextCellValue('No'),
+      xls.TextCellValue('Tanggal'),
       xls.TextCellValue('Nama'),
       xls.TextCellValue('NIP'),
       xls.TextCellValue('Jenis Absen'),
@@ -268,7 +282,7 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
 
     for (var item in _rekapData) {
       sheet.appendRow([
-        xls.TextCellValue(item['no'].toString()),
+        xls.TextCellValue(item['tanggal']),
         xls.TextCellValue(item['nama']),
         xls.TextCellValue(item['nip']),
         xls.TextCellValue(item['jenis_absen']),
@@ -305,7 +319,6 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
       ('di tolak', 'Ditolak (Izin/Penugasan)', Colors.red),
       ('di terima / di tolak', 'Menunggu approval', Colors.orange),
     ];
-
     return Wrap(
       spacing: 24,
       runSpacing: 20,
@@ -344,7 +357,7 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
       backgroundColor: const Color(0xFFF1F5F9),
       body: Row(
         children: [
-          // Sidebar Kiri - Super Elegan
+          // Sidebar Kiri
           Container(
             width: 320,
             decoration: const BoxDecoration(
@@ -451,12 +464,11 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
               ],
             ),
           ),
-
           // Main Content
           Expanded(
             child: Column(
               children: [
-                // Header - Responsif & Tidak Overflow
+                // Header
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 32,
@@ -579,7 +591,6 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
                     ],
                   ),
                 ),
-
                 // Body
                 Expanded(
                   child: _loading
@@ -621,7 +632,6 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Legend
                               const Text(
                                 'Keterangan Status Absen',
                                 style: TextStyle(
@@ -649,8 +659,6 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
                                 ),
                               ),
                               const SizedBox(height: 80),
-
-                              // Tabel Rekap
                               const Text(
                                 'Rekap Harian',
                                 style: TextStyle(
@@ -682,7 +690,9 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
                                         fontWeight: FontWeight.w500,
                                       ),
                                       columns: const [
-                                        DataColumn(label: Text('No')),
+                                        DataColumn(
+                                          label: Text('Tanggal'),
+                                        ), // <-- Ubah dari No ke Tanggal
                                         DataColumn(label: Text('Nama')),
                                         DataColumn(label: Text('NIP')),
                                         DataColumn(label: Text('Jenis Absen')),
@@ -716,7 +726,7 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
                                           cells: [
                                             DataCell(
                                               Text(
-                                                item['no'].toString(),
+                                                item['tanggal'],
                                                 style: const TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                 ),
