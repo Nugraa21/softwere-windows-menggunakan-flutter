@@ -22,11 +22,6 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
     _loadPresensi();
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
   Future<void> _loadPresensi() async {
     setState(() => _loading = true);
     try {
@@ -185,10 +180,11 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
   Future<void> _launchInBrowser(String url) async {
     final uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Tidak dapat membuka dokumen')),
         );
+      }
     }
   }
 
@@ -272,6 +268,18 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Hitung jumlah untuk badge
+    int countAll = _items.length;
+    int countWaiting = _items
+        .where((e) => (e['status'] ?? 'Waiting') == 'Waiting')
+        .length;
+    int countApproved = _items
+        .where((e) => (e['status'] ?? 'Waiting') == 'Disetujui')
+        .length;
+    int countRejected = _items
+        .where((e) => (e['status'] ?? 'Waiting') == 'Ditolak')
+        .length;
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: Row(
@@ -360,12 +368,8 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
           Expanded(
             child: Column(
               children: [
-                // Header dengan Tombol Back & Filter
+                // HEADER 2 BARIS (SUDAH AMAN TANPA OVERFLOW)
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 40,
-                    vertical: 32,
-                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     boxShadow: [
@@ -376,95 +380,263 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                       ),
                     ],
                   ),
-                  child: Row(
+                  child: Column(
                     children: [
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.arrow_back_rounded, size: 36),
-                        tooltip: 'Kembali',
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.grey[200],
-                          padding: const EdgeInsets.all(20),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
+                      // Baris atas: Back + Judul + Refresh
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(40, 32, 40, 20),
+                        child: Row(
+                          children: [
+                            IconButton(
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(
+                                Icons.arrow_back_rounded,
+                                size: 36,
+                              ),
+                              tooltip: 'Kembali',
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.grey[200],
+                                padding: const EdgeInsets.all(20),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 32),
+                            const Text(
+                              'Persetujuan Presensi',
+                              style: TextStyle(
+                                fontSize: 36,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const Spacer(),
+                            ElevatedButton.icon(
+                              onPressed: _loadPresensi,
+                              icon: const Icon(Icons.refresh_rounded, size: 26),
+                              label: const Text(
+                                'Refresh',
+                                style: TextStyle(fontSize: 18),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF3B82F6),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 36,
+                                  vertical: 22,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                ),
+                                elevation: 8,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 32),
-                      const Text(
-                        'Persetujuan Presensi',
-                        style: TextStyle(
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const Spacer(),
 
-                      // Segmented Filter
-                      SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(
-                            value: 'All',
-                            label: Text('Semua'),
-                            icon: Icon(Icons.list_alt_rounded),
+                      // Baris bawah: Filter SegmentedButton
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(40, 0, 40, 32),
+                        child: Center(
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 1000),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(30),
+                              border: Border.all(color: Colors.grey[300]!),
+                            ),
+                            child: SegmentedButton<String>(
+                              style: ButtonStyle(
+                                padding: WidgetStateProperty.all(
+                                  const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 16,
+                                  ),
+                                ),
+                                textStyle: WidgetStateProperty.all(
+                                  const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                iconSize: WidgetStateProperty.all(26),
+                                shape: WidgetStateProperty.all(
+                                  RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                ),
+                                backgroundColor:
+                                    WidgetStateProperty.resolveWith((states) {
+                                      return states.contains(
+                                            WidgetState.selected,
+                                          )
+                                          ? const Color(0xFF3B82F6)
+                                          : Colors.transparent;
+                                    }),
+                                foregroundColor:
+                                    WidgetStateProperty.resolveWith((states) {
+                                      return states.contains(
+                                            WidgetState.selected,
+                                          )
+                                          ? Colors.white
+                                          : Colors.black87;
+                                    }),
+                              ),
+                              selected: {_filterStatus},
+                              onSelectionChanged: (newSelection) {
+                                setState(
+                                  () => _filterStatus = newSelection.first,
+                                );
+                              },
+                              segments: [
+                                ButtonSegment<String>(
+                                  value: 'All',
+                                  icon: const Icon(Icons.list_alt_rounded),
+                                  label: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text('Semua'),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 9,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _filterStatus == 'All'
+                                              ? Colors.white.withOpacity(0.3)
+                                              : Colors.white,
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '$countAll',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: _filterStatus == 'All'
+                                                ? Colors.white
+                                                : const Color(0xFF3B82F6),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                ButtonSegment<String>(
+                                  value: 'Waiting',
+                                  icon: const Icon(Icons.pending_rounded),
+                                  label: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Flexible(child: Text('Menunggu')),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 9,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _filterStatus == 'Waiting'
+                                              ? Colors.white.withOpacity(0.3)
+                                              : Colors.white,
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '$countWaiting',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: _filterStatus == 'Waiting'
+                                                ? Colors.white
+                                                : const Color(0xFF3B82F6),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                ButtonSegment<String>(
+                                  value: 'Disetujui',
+                                  icon: const Icon(Icons.check_circle_rounded),
+                                  label: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Flexible(child: Text('Disetujui')),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 9,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _filterStatus == 'Disetujui'
+                                              ? Colors.white.withOpacity(0.3)
+                                              : Colors.white,
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '$countApproved',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: _filterStatus == 'Disetujui'
+                                                ? Colors.white
+                                                : const Color(0xFF3B82F6),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                ButtonSegment<String>(
+                                  value: 'Ditolak',
+                                  icon: const Icon(Icons.cancel_rounded),
+                                  label: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text('Ditolak'),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 9,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _filterStatus == 'Ditolak'
+                                              ? Colors.white.withOpacity(0.3)
+                                              : Colors.white,
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '$countRejected',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: _filterStatus == 'Ditolak'
+                                                ? Colors.white
+                                                : const Color(0xFF3B82F6),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          ButtonSegment(
-                            value: 'Waiting',
-                            label: Text('Menunggu'),
-                            icon: Icon(Icons.pending_rounded),
-                          ),
-                          ButtonSegment(
-                            value: 'Disetujui',
-                            label: Text('Disetujui'),
-                            icon: Icon(Icons.check_circle_rounded),
-                          ),
-                          ButtonSegment(
-                            value: 'Ditolak',
-                            label: Text('Ditolak'),
-                            icon: Icon(Icons.cancel_rounded),
-                          ),
-                        ],
-                        selected: {_filterStatus},
-                        onSelectionChanged: (newSelection) {
-                          setState(() => _filterStatus = newSelection.first);
-                        },
-                        style: ButtonStyle(
-                          backgroundColor: WidgetStateProperty.resolveWith((
-                            states,
-                          ) {
-                            if (states.contains(WidgetState.selected))
-                              return const Color(0xFF3B82F6);
-                            return Colors.grey[200];
-                          }),
-                          foregroundColor: WidgetStateProperty.resolveWith((
-                            states,
-                          ) {
-                            if (states.contains(WidgetState.selected))
-                              return Colors.white;
-                            return Colors.black87;
-                          }),
-                        ),
-                      ),
-                      const SizedBox(width: 32),
-
-                      ElevatedButton.icon(
-                        onPressed: _loadPresensi,
-                        icon: const Icon(Icons.refresh_rounded, size: 26),
-                        label: const Text(
-                          'Refresh',
-                          style: TextStyle(fontSize: 18),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF3B82F6),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 36,
-                            vertical: 22,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          elevation: 8,
                         ),
                       ),
                     ],
@@ -550,13 +722,11 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                                   child: InkWell(
                                     borderRadius: BorderRadius.circular(28),
                                     hoverColor: jenisColor.withOpacity(0.08),
-                                    onTap:
-                                        () {}, // detail bisa dibuka via klik card jika mau
+                                    onTap: () {},
                                     child: Padding(
                                       padding: const EdgeInsets.all(36),
                                       child: Row(
                                         children: [
-                                          // Icon Jenis
                                           Container(
                                             padding: const EdgeInsets.all(24),
                                             decoration: BoxDecoration(
@@ -583,8 +753,6 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                                             ),
                                           ),
                                           const SizedBox(width: 40),
-
-                                          // Foto Selfie
                                           if (fotoUrl != null)
                                             GestureDetector(
                                               onTap: () =>
@@ -602,8 +770,6 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                                             ),
                                           if (fotoUrl != null)
                                             const SizedBox(width: 40),
-
-                                          // Info Utama
                                           Expanded(
                                             child: Column(
                                               crossAxisAlignment:
@@ -675,13 +841,10 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                                               ],
                                             ),
                                           ),
-
-                                          // Status & Actions
                                           Column(
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.end,
                                             children: [
-                                              // Status Badge
                                               Container(
                                                 padding:
                                                     const EdgeInsets.symmetric(
@@ -735,7 +898,6 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                                                   ],
                                                 ),
                                               ),
-
                                               if (dokumenUrl != null) ...[
                                                 const SizedBox(height: 20),
                                                 OutlinedButton.icon(
@@ -764,8 +926,6 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                                                   ),
                                                 ),
                                               ],
-
-                                              // Tombol Aksi hanya jika Waiting
                                               if (status == 'Waiting') ...[
                                                 const SizedBox(height: 32),
                                                 Row(
