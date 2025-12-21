@@ -1,5 +1,5 @@
 // lib/pages/rekap_hari_ini_page.dart
-// REKAP HARIAN - MULTI HARI PER KARYAWAN, TANGGAL DI KOLOM PERTAMA
+// REKAP HARIAN - DENGAN TANGGAL FORMAT dd/MM & URUT BERDASARKAN TANGGAL
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:excel/excel.dart' as xls;
@@ -68,7 +68,7 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
   void _processRekap() {
     if (_startDate == null || _endDate == null) return;
 
-    // Group presensi per user per tanggal
+    // Group presensi per user per tanggal (YYYY-MM-DD)
     final Map<String, Map<String, List<dynamic>>> userDatePresensi = {};
 
     for (var p in _allPresensi) {
@@ -88,7 +88,9 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
     }
 
     final List<Map<String, dynamic>> tempRekap = [];
-    int no = 1;
+    final DateFormat displayFormat = DateFormat(
+      'dd/MM',
+    ); // Format tampilan tanggal
 
     for (var user in _users) {
       final userId = user['id'].toString();
@@ -98,10 +100,7 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
       final userDates = userDatePresensi[userId];
       if (userDates == null || userDates.isEmpty) continue;
 
-      // Urutkan tanggal
-      final sortedDates = userDates.keys.toList()..sort();
-
-      for (var dateStr in sortedDates) {
+      for (var dateStr in userDates.keys) {
         final dayPresensi = userDates[dateStr]!;
 
         final masukBiasa = dayPresensi.firstWhere(
@@ -153,9 +152,11 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
           }
         }
 
+        final dateTime = DateTime.parse(dateStr);
+
         tempRekap.add({
-          'no': no++,
-          'tanggal': dateStr.substring(8, 10), // dd (01, 02, dst.)
+          'tanggal_date': dateTime, // untuk sorting akurat
+          'tanggal_display': displayFormat.format(dateTime), // dd/MM
           'nama': nama,
           'nip': nip,
           'jenis_absen': jenisAbsen,
@@ -172,11 +173,11 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
       }
     }
 
-    // Sort by nama lalu tanggal
+    // Urutkan berdasarkan tanggal (kronologis), lalu nama
     tempRekap.sort((a, b) {
-      int cmp = (a['nama'] as String).compareTo(b['nama'] as String);
-      if (cmp != 0) return cmp;
-      return a['tanggal'].compareTo(b['tanggal']);
+      int dateCmp = a['tanggal_date'].compareTo(b['tanggal_date']);
+      if (dateCmp != 0) return dateCmp;
+      return (a['nama'] as String).compareTo(b['nama'] as String);
     });
 
     setState(() {
@@ -253,7 +254,6 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
     excel.delete('Sheet1');
     xls.Sheet sheet = excel['Rekap Harian'];
 
-    // Header baru: Tanggal di kolom pertama
     sheet.appendRow([
       xls.TextCellValue('Tanggal'),
       xls.TextCellValue('Nama'),
@@ -282,7 +282,7 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
 
     for (var item in _rekapData) {
       sheet.appendRow([
-        xls.TextCellValue(item['tanggal']),
+        xls.TextCellValue(item['tanggal_display']),
         xls.TextCellValue(item['nama']),
         xls.TextCellValue(item['nip']),
         xls.TextCellValue(item['jenis_absen']),
@@ -690,9 +690,7 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
                                         fontWeight: FontWeight.w500,
                                       ),
                                       columns: const [
-                                        DataColumn(
-                                          label: Text('Tanggal'),
-                                        ), // <-- Ubah dari No ke Tanggal
+                                        DataColumn(label: Text('Tanggal')),
                                         DataColumn(label: Text('Nama')),
                                         DataColumn(label: Text('NIP')),
                                         DataColumn(label: Text('Jenis Absen')),
@@ -702,11 +700,7 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
                                         DataColumn(label: Text('Absen Pulang')),
                                         DataColumn(label: Text('Keterangan')),
                                       ],
-                                      rows: _filteredData.asMap().entries.map((
-                                        entry,
-                                      ) {
-                                        final index = entry.key;
-                                        final item = entry.value;
+                                      rows: _filteredData.map((item) {
                                         final String ket = item['keterangan'];
                                         final bool isTerima =
                                             ket == 'di terima';
@@ -717,16 +711,10 @@ class _RekapHariIniPageState extends State<RekapHariIniPage> {
                                             ket == 'sangsi 3 jam tidak masuk';
 
                                         return DataRow(
-                                          color: MaterialStatePropertyAll(
-                                            index % 2 == 0
-                                                ? Colors.blueGrey[50]!
-                                                      .withOpacity(0.3)
-                                                : Colors.white,
-                                          ),
                                           cells: [
                                             DataCell(
                                               Text(
-                                                item['tanggal'],
+                                                item['tanggal_display'],
                                                 style: const TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                 ),
