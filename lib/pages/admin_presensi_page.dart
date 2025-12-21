@@ -14,12 +14,22 @@ class AdminPresensiPage extends StatefulWidget {
 class _AdminPresensiPageState extends State<AdminPresensiPage> {
   bool _loading = false;
   List<dynamic> _items = [];
+  List<dynamic> _filteredItems = [];
   String _filterStatus = 'All';
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadPresensi();
+    _searchController.addListener(_applyFilters);
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_applyFilters);
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPresensi() async {
@@ -28,16 +38,13 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
       final data = await ApiService.getAllPresensi();
       setState(() {
         _items = data ?? [];
-        _items.sort(
-          (a, b) =>
-              DateTime.parse(
-                b['created_at'] ?? DateTime.now().toIso8601String(),
-              ).compareTo(
-                DateTime.parse(
-                  a['created_at'] ?? DateTime.now().toIso8601String(),
-                ),
-              ),
-        );
+        _items.sort((a, b) {
+          // Sort berdasarkan created_at jika ada, fallback ke id
+          String dateA = a['created_at'] ?? a['id'].toString();
+          String dateB = b['created_at'] ?? b['id'].toString();
+          return dateB.compareTo(dateA);
+        });
+        _applyFilters();
       });
     } catch (e) {
       if (mounted) {
@@ -53,11 +60,90 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
     }
   }
 
-  List<dynamic> get _filteredItems {
-    if (_filterStatus == 'All') return _items;
-    return _items
-        .where((item) => (item['status'] ?? 'Waiting') == _filterStatus)
-        .toList();
+  void _applyFilters() {
+    var temp = _items;
+
+    // Filter status
+    if (_filterStatus != 'All') {
+      temp = temp
+          .where((item) => (item['status'] ?? 'Waiting') == _filterStatus)
+          .toList();
+    }
+
+    // Filter search
+    if (_searchController.text.isNotEmpty) {
+      final query = _searchController.text.toLowerCase();
+      temp = temp.where((item) {
+        final nama = (item['nama_lengkap'] ?? '').toLowerCase();
+        final jenis = (item['jenis'] ?? '').toLowerCase();
+        final keterangan = (item['keterangan'] ?? '').toLowerCase();
+        return nama.contains(query) ||
+            jenis.contains(query) ||
+            keterangan.contains(query);
+      }).toList();
+    }
+
+    setState(() {
+      _filteredItems = temp;
+    });
+  }
+
+  Future<void> _deleteAbsensi(String id, String nama) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Hapus Absensi?',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Yakin ingin menghapus absensi atas nama:\n\n$nama\n\nTindakan ini tidak dapat dibatalkan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text(
+              'Hapus',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _loading = true);
+    final res = await ApiService.deleteAbsensi(
+      id,
+    ); // <-- Sesuai nama method baru
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          res['message'] ??
+              (res['status'] == true
+                  ? 'Absensi berhasil dihapus'
+                  : 'Gagal menghapus absensi'),
+        ),
+        backgroundColor: res['status'] == true
+            ? Colors.green
+            : Colors.redAccent,
+      ),
+    );
+
+    if (res['status'] == true) {
+      _loadPresensi();
+    } else {
+      setState(() => _loading = false);
+    }
   }
 
   IconData _getJenisIconData(String jenis) {
@@ -112,31 +198,25 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
   }
 
   Future<void> _updateStatus(String id, String newStatus) async {
-    try {
-      final res = await ApiService.updatePresensiStatus(
-        id: id,
-        status: newStatus,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            res['message'] ??
-                (res['status'] == true
-                    ? 'Status berhasil diupdate'
-                    : 'Gagal update'),
-          ),
-          backgroundColor: res['status'] == true
-              ? Colors.green
-              : Colors.redAccent,
+    final res = await ApiService.updatePresensiStatus(
+      id: id,
+      status: newStatus,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          res['message'] ??
+              (res['status'] == true
+                  ? 'Status berhasil diupdate'
+                  : 'Gagal update'),
         ),
-      );
-      _loadPresensi();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
-      );
-    }
+        backgroundColor: res['status'] == true
+            ? Colors.green
+            : Colors.redAccent,
+      ),
+    );
+    if (res['status'] == true) _loadPresensi();
   }
 
   void _showFullPhoto(String url) {
@@ -268,7 +348,6 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Hitung jumlah untuk badge
     int countAll = _items.length;
     int countWaiting = _items
         .where((e) => (e['status'] ?? 'Waiting') == 'Waiting')
@@ -368,7 +447,7 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
           Expanded(
             child: Column(
               children: [
-                // HEADER 2 BARIS (SUDAH AMAN TANPA OVERFLOW)
+                // HEADER DENGAN SEARCH + FILTER
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -382,7 +461,6 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                   ),
                   child: Column(
                     children: [
-                      // Baris atas: Back + Judul + Refresh
                       Padding(
                         padding: const EdgeInsets.fromLTRB(40, 32, 40, 20),
                         child: Row(
@@ -393,7 +471,6 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                                 Icons.arrow_back_rounded,
                                 size: 36,
                               ),
-                              tooltip: 'Kembali',
                               style: IconButton.styleFrom(
                                 backgroundColor: Colors.grey[200],
                                 padding: const EdgeInsets.all(20),
@@ -435,7 +512,34 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                         ),
                       ),
 
-                      // Baris bawah: Filter SegmentedButton
+                      // Search Bar
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 40,
+                          vertical: 8,
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: 'Cari nama, jenis, atau keterangan...',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            filled: true,
+                            fillColor: Colors.grey[100],
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(30),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 18,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Filter Segmented
                       Padding(
                         padding: const EdgeInsets.fromLTRB(40, 0, 40, 32),
                         child: Center(
@@ -471,27 +575,26 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                                   ),
                                 ),
                                 backgroundColor:
-                                    WidgetStateProperty.resolveWith((states) {
-                                      return states.contains(
-                                            WidgetState.selected,
-                                          )
+                                    WidgetStateProperty.resolveWith(
+                                      (states) =>
+                                          states.contains(WidgetState.selected)
                                           ? const Color(0xFF3B82F6)
-                                          : Colors.transparent;
-                                    }),
+                                          : Colors.transparent,
+                                    ),
                                 foregroundColor:
-                                    WidgetStateProperty.resolveWith((states) {
-                                      return states.contains(
-                                            WidgetState.selected,
-                                          )
+                                    WidgetStateProperty.resolveWith(
+                                      (states) =>
+                                          states.contains(WidgetState.selected)
                                           ? Colors.white
-                                          : Colors.black87;
-                                    }),
+                                          : Colors.black87,
+                                    ),
                               ),
                               selected: {_filterStatus},
                               onSelectionChanged: (newSelection) {
-                                setState(
-                                  () => _filterStatus = newSelection.first,
-                                );
+                                setState(() {
+                                  _filterStatus = newSelection.first;
+                                  _applyFilters();
+                                });
                               },
                               segments: [
                                 ButtonSegment<String>(
@@ -643,7 +746,7 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                   ),
                 ),
 
-                // List Presensi
+                // List Absensi
                 Expanded(
                   child: _loading
                       ? const Center(
@@ -664,7 +767,10 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                               ),
                               const SizedBox(height: 40),
                               Text(
-                                'Tidak ada presensi ${_filterStatus == 'All' ? '' : _filterStatus.toLowerCase()}',
+                                _searchController.text.isEmpty &&
+                                        _filterStatus == 'All'
+                                    ? 'Tidak ada data absensi'
+                                    : 'Tidak ditemukan absensi yang sesuai',
                                 style: const TextStyle(
                                   fontSize: 28,
                                   fontWeight: FontWeight.w600,
@@ -673,7 +779,7 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                               ),
                               const SizedBox(height: 16),
                               const Text(
-                                'Tarik ke bawah atau klik Refresh untuk memuat ulang',
+                                'Coba ubah pencarian atau filter',
                                 style: TextStyle(
                                   fontSize: 18,
                                   color: Colors.grey,
@@ -692,13 +798,13 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                             final jenisColor = _getJenisColor(
                               item['jenis'] ?? '',
                             );
-                            final created = DateTime.parse(
-                              item['created_at'] ??
-                                  DateTime.now().toIso8601String(),
-                            );
-                            final formattedDate = DateFormat(
-                              'dd MMMM yyyy, HH:mm',
-                            ).format(created);
+                            final created =
+                                item['created_at'] ?? item['id'].toString();
+                            final formattedDate = item['created_at'] != null
+                                ? DateFormat(
+                                    'dd MMMM yyyy, HH:mm',
+                                  ).format(DateTime.parse(item['created_at']))
+                                : 'ID: ${item['id']}';
                             final fotoUrl =
                                 item['selfie']?.toString().isNotEmpty == true
                                 ? '${ApiService.baseUrl}/selfie/${item['selfie']}'
@@ -722,7 +828,6 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                                   child: InkWell(
                                     borderRadius: BorderRadius.circular(28),
                                     hoverColor: jenisColor.withOpacity(0.08),
-                                    onTap: () {},
                                     child: Padding(
                                       padding: const EdgeInsets.all(36),
                                       child: Row(
@@ -795,7 +900,6 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                                                   'Waktu: $formattedDate',
                                                   style: const TextStyle(
                                                     fontSize: 18,
-                                                    color: Colors.black,
                                                   ),
                                                 ),
                                                 const SizedBox(height: 12),
@@ -1004,6 +1108,35 @@ class _AdminPresensiPageState extends State<AdminPresensiPage> {
                                                   ],
                                                 ),
                                               ],
+                                              const SizedBox(height: 20),
+                                              OutlinedButton.icon(
+                                                onPressed: () => _deleteAbsensi(
+                                                  item['id'].toString(),
+                                                  item['nama_lengkap'] ??
+                                                      'Karyawan',
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.delete_rounded,
+                                                  color: Colors.red,
+                                                ),
+                                                label: const Text(
+                                                  'Hapus Absensi',
+                                                  style: TextStyle(
+                                                    color: Colors.red,
+                                                  ),
+                                                ),
+                                                style: OutlinedButton.styleFrom(
+                                                  side: const BorderSide(
+                                                    color: Colors.red,
+                                                    width: 2,
+                                                  ),
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 20,
+                                                        vertical: 14,
+                                                      ),
+                                                ),
+                                              ),
                                             ],
                                           ),
                                         ],

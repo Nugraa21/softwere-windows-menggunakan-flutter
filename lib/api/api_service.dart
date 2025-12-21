@@ -146,6 +146,7 @@ class ApiService {
     return List<dynamic>.from(result['data'] ?? []);
   }
 
+  // AMBIL SEMUA PRESENSI (GET)
   static Future<List<dynamic>> getAllPresensi() async {
     final headers = await _getHeaders();
     final result = await _safeRequest(
@@ -154,8 +155,21 @@ class ApiService {
         headers: headers,
       ),
     );
-    if (result['status'] == false) return []; // Handle offline/server errors
+    if (result['status'] == false) return [];
     return List<dynamic>.from(result['data'] ?? []);
+  }
+
+  // HAPUS ABSENSI (POST ke file yang sama)
+  static Future<Map<String, dynamic>> deleteAbsensi(String id) async {
+    final headers = await _getHeaders();
+    final result = await _safeRequest(
+      () => http.post(
+        Uri.parse("$baseUrl/absen_admin_list.php"),
+        headers: headers,
+        body: jsonEncode({"action": "delete", "id": id}),
+      ),
+    );
+    return result;
   }
 
   static Future<List<dynamic>> getRekap({String? month, String? year}) async {
