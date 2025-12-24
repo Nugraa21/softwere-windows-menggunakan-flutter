@@ -1,7 +1,7 @@
-import 'dart:io'; // Untuk deteksi platform
+import 'dart:io'; // ← Tambahan untuk bypass SSL
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:window_manager/window_manager.dart'; // IMPORT INI
+import 'package:window_manager/window_manager.dart';
 
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
@@ -16,31 +16,72 @@ import 'pages/rekap_hari_ini_page.dart';
 import 'models/user_model.dart';
 import 'api/api_service.dart';
 
+// === TAMBAHAN: Bypass self-signed certificate (HANYA UNTUK TESTING/DEVELOPMENT) ===
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
+  }
+}
+// ==============================================================================
+
+// Class listener yang benar
+class _MyWindowListener extends WindowListener {
+  @override
+  void onWindowMaximize() async {
+    await windowManager.setFullScreen(true);
+  }
+
+  @override
+  void onWindowUnmaximize() async {
+    await windowManager.setFullScreen(false);
+    await windowManager.setSize(const Size(1920, 1080));
+    await windowManager.center();
+  }
+
+  @override
+  void onWindowEnterFullScreen() async {
+    // Opsional, bisa dibiarkan kosong
+  }
+
+  @override
+  void onWindowLeaveFullScreen() async {
+    await windowManager.setSize(const Size(1920, 1080));
+    await windowManager.center();
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Hanya aktifkan di desktop (Windows, macOS, Linux)
+  // === AKTIFKAN BYPASS SSL (self-signed certificate) ===
+  HttpOverrides.global = MyHttpOverrides();
+  // ====================================================
+
   if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
     await windowManager.ensureInitialized();
 
     WindowOptions windowOptions = const WindowOptions(
-      size: Size(1920, 1080), // UKURAN TETAP 1920x1080
-      center: true, // Di tengah layar
+      size: Size(1920, 1080),
+      center: true,
       backgroundColor: Colors.transparent,
       skipTaskbar: false,
       title: 'Skaduta Presensi',
-      minimumSize: Size(
-        1920,
-        1080,
-      ), // Minimal ukuran = maksimal (biar tidak bisa kecil)
-      maximumSize: Size(1920, 1080), // Maksimal ukuran = 1920x1080
       titleBarStyle: TitleBarStyle.normal,
+      fullScreen: false,
     );
 
-    windowManager.waitUntilReadyToShow(windowOptions, () async {
-      await windowManager.setResizable(false); // Tidak bisa di-resize
-      await windowManager.setMaximizable(false); // Tombol maximize nonaktif
-      await windowManager.setMinimizable(true); // Minimize tetap bisa
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.setResizable(true);
+      await windowManager.setMaximizable(true);
+      await windowManager.setMinimizable(true);
+      await windowManager.setMinimumSize(const Size(1920, 1080));
+
+      // Tambahkan listener dengan class yang extends WindowListener
+      windowManager.addListener(_MyWindowListener());
+
       await windowManager.focus();
       await windowManager.show();
     });
@@ -96,7 +137,6 @@ class _SkadutaAppState extends State<SkadutaApp> {
     return MaterialApp(
       title: 'Skaduta Presensi',
       debugShowCheckedModeBanner: false,
-
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -104,7 +144,6 @@ class _SkadutaAppState extends State<SkadutaApp> {
       ],
       supportedLocales: const [Locale('id', 'ID'), Locale('en', 'US')],
       locale: const Locale('id', 'ID'),
-
       theme: ThemeData(
         colorSchemeSeed: Colors.blueGrey,
         useMaterial3: true,
@@ -117,7 +156,6 @@ class _SkadutaAppState extends State<SkadutaApp> {
           foregroundColor: Colors.white,
         ),
       ),
-
       home: _initialPage,
       routes: {
         '/login': (_) => const LoginPage(),

@@ -7,8 +7,9 @@ import '../utils/encryption.dart'; // Asumsi lo punya file ini untuk ApiEncrypti
 
 class ApiService {
   // Ganti dengan URL ngrok kamu yang aktif
-  static const String baseUrl =
-      "https://nonlitigious-alene-uninfinitely.ngrok-free.dev/backendapk/";
+  static const String baseUrl = "https://10.10.10.25/code/";
+  // static const String baseUrl =
+  //     "https://nonlitigious-alene-uninfinitely.ngrok-free.dev/backendapk/";
 
   // API Key harus sama persis dengan yang di config.php
   static const String _apiKey = 'Skaduta2025!@#SecureAPIKey1234567890';

@@ -21,8 +21,9 @@
 //
 // ------------------------------- NGROK --------------------------------------
 
-const String baseUrl =
-    "https://nonlitigious-alene-uninfinitely.ngrok-free.dev/backendapk/";
+const String baseUrl = "https://10.10.10.25/code/";
+// const String baseUrl =
+//     "https://nonlitigious-alene-uninfinitely.ngrok-free.dev/backendapk/";
 
 // -------------------------- BASE URL VIA IP LOCAL ----------------------------
 //

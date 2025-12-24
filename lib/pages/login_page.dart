@@ -324,29 +324,29 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                   ),
                                   const SizedBox(height: 20),
                                   // Register Link
-                                  TextButton(
-                                    onPressed: () => Navigator.pushNamed(
-                                      context,
-                                      '/register',
-                                    ),
-                                    child: RichText(
-                                      text: TextSpan(
-                                        style: TextStyle(
-                                          color: const Color(0xFF3B82F6),
-                                          fontSize: 16,
-                                        ),
-                                        children: const [
-                                          TextSpan(text: 'Belum punya akun? '),
-                                          TextSpan(
-                                            text: 'Daftar di sini',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
+                                  // TextButton(
+                                  //   onPressed: () => Navigator.pushNamed(
+                                  //     context,
+                                  //     '/register',
+                                  //   ),
+                                  //   child: RichText(
+                                  //     text: TextSpan(
+                                  //       style: TextStyle(
+                                  //         color: const Color(0xFF3B82F6),
+                                  //         fontSize: 16,
+                                  //       ),
+                                  //       children: const [
+                                  //         TextSpan(text: 'Belum punya akun? '),
+                                  //         TextSpan(
+                                  //           text: 'Daftar di sini',
+                                  //           style: TextStyle(
+                                  //             fontWeight: FontWeight.w600,
+                                  //           ),
+                                  //         ),
+                                  //       ],
+                                  //     ),
+                                  //   ),
+                                  // ),
                                 ],
                               ),
                             ),
