@@ -7,7 +7,10 @@ import '../utils/encryption.dart'; // Asumsi lo punya file ini untuk ApiEncrypti
 
 class ApiService {
   // Ganti dengan URL ngrok kamu yang aktif
-  static const String baseUrl = "https://10.10.10.25/code/";
+  static const String baseUrl =
+      "https://nonlitigious-alene-uninfinitely.ngrok-free.dev/";
+  // static const String baseUrl =
+  //     "https://103.210.35.189:3001/code";
   // static const String baseUrl =
   //     "https://nonlitigious-alene-uninfinitely.ngrok-free.dev/backendapk/";
 
@@ -16,23 +19,22 @@ class ApiService {
 
   /// Get device ID for binding (skip for Windows desktop)
   static Future<String> getDeviceId() async {
-    try {
-      if (Platform.isWindows) {
-        return ''; // Skip device ID for Windows desktop
-      }
-      final deviceInfo = DeviceInfoPlugin();
-      if (Platform.isAndroid) {
-        final androidInfo = await deviceInfo.androidInfo;
-        return androidInfo.id; // Unique device ID for Android
-      } else if (Platform.isIOS) {
-        final iosInfo = await deviceInfo.iosInfo;
-        return iosInfo.identifierForVendor ?? ''; // Unique for iOS app installs
-      }
-      return ''; // Fallback
-    } catch (e) {
-      print('Error getting device ID: $e');
-      return '';
+    if (Platform.isWindows) return '';
+
+    final prefs = await SharedPreferences.getInstance();
+    String? deviceId = prefs.getString('stable_device_id');
+
+    if (deviceId != null && deviceId.isNotEmpty) {
+      return deviceId;
     }
+
+    final newId =
+        DateTime.now().millisecondsSinceEpoch.toString() +
+        "-" +
+        (100000 + (DateTime.now().microsecondsSinceEpoch % 900000)).toString();
+
+    await prefs.setString('stable_device_id', newId);
+    return newId;
   }
 
   /// Header umum untuk semua request

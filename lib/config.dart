@@ -21,7 +21,8 @@
 //
 // ------------------------------- NGROK --------------------------------------
 
-const String baseUrl = "https://10.10.10.25/code/";
+const String baseUrl =
+    "https://nonlitigious-alene-uninfinitely.ngrok-free.dev/";
 // const String baseUrl =
 //     "https://nonlitigious-alene-uninfinitely.ngrok-free.dev/backendapk/";
 
