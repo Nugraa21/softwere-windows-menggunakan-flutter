@@ -231,7 +231,7 @@ class _UserManagementPageState extends State<UserManagementPage>
                     TextField(
                       controller: nipC,
                       decoration: InputDecoration(
-                        labelText: 'NIP/NISN * (wajib untuk Guru)',
+                        labelText: 'NIP/NIK * (wajib untuk Guru)',
                         prefixIcon: const Icon(Icons.badge_outlined),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
@@ -345,7 +345,7 @@ class _UserManagementPageState extends State<UserManagementPage>
                           nipC.text.trim().isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('NIP/NISN wajib diisi untuk Guru'),
+                            content: Text('NIP/NIK wajib diisi untuk Guru'),
                             backgroundColor: Color(0xFFEF4444),
                           ),
                         );
@@ -467,7 +467,7 @@ class _UserManagementPageState extends State<UserManagementPage>
                 TextField(
                   controller: nipC,
                   decoration: InputDecoration(
-                    labelText: 'NIP/NISN (opsional)',
+                    labelText: 'NIP/NIK (opsional)',
                     prefixIcon: const Icon(Icons.badge),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -795,7 +795,7 @@ class _UserManagementPageState extends State<UserManagementPage>
                           child: TextField(
                             controller: _searchC,
                             decoration: InputDecoration(
-                              hintText: 'Cari nama, username, NIP/NISN...',
+                              hintText: 'Cari nama, username, NIP/NIK...',
                               prefixIcon: const Icon(
                                 Icons.search_rounded,
                                 size: 28,
@@ -957,7 +957,7 @@ class _UserManagementPageState extends State<UserManagementPage>
                                                     .isNotEmpty ==
                                                 true)
                                               Text(
-                                                'NIP/NISN: ${u['nip_nisn']}',
+                                                'NIP/NIK: ${u['nip_nisn']}',
                                                 style: const TextStyle(
                                                   fontSize: 18,
                                                 ),
