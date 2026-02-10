@@ -7,7 +7,8 @@ import '../utils/encryption.dart'; // Asumsi lo punya file ini untuk ApiEncrypti
 
 class ApiService {
   // Ganti dengan URL ngrok kamu yang aktif
-  static const String baseUrl = "https://103.210.35.189:3001/";
+  static const String baseUrl =
+      "https://marlin-relative-mongrel.ngrok-free.app/backendapk/";
   // static const String baseUrl =
   // "https://103.210.35.189:3001/code";
   // static const String baseUrl =
